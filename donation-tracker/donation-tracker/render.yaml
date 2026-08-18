@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: donation-tracker
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build && npx prisma migrate deploy --schema=server/prisma/schema.prisma
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DATABASE_URL
+        value: file:./data/prod.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+    disk:
+      name: donation-tracker-data
+      mountPath: /opt/render/project/src/server/data
+      sizeGB: 1
