@@ -12,7 +12,7 @@ router.get("/", authorize("admin", "manager"), async (req, res) => {
   const groups = await prisma.group.findMany({
     where,
     include: {
-      manager: { select: { id: true, email: true } },
+      manager: { select: { id: true, email: true, name: true } },
       _count: { select: { contacts: true } },
     },
     orderBy: { name: "asc" },

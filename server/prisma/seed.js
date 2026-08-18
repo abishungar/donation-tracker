@@ -27,7 +27,7 @@ async function main() {
     const managerPassword = "Manager123!";
     const managerHash = await bcrypt.hash(managerPassword, 10);
     const managerUser = await prisma.user.create({
-      data: { email: "manager@example.com", password: managerHash, role: "manager" },
+      data: { email: "manager@example.com", password: managerHash, role: "manager", name: "Sam Manager" },
     });
     await prisma.group.update({
       where: { id: group.id },

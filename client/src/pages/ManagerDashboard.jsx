@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from "react";
 import Layout from "../components/Layout.jsx";
+import ContactModal from "../components/ContactModal.jsx";
+import DonationModal from "../components/DonationModal.jsx";
 import api from "../api";
+import { UserPlus, HeartHandshake, Pencil, Trash2 } from "lucide-react";
 
 export default function ManagerDashboard() {
   const [groups, setGroups] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [donations, setDonations] = useState([]);
   const [error, setError] = useState("");
-
-  const [contactForm, setContactForm] = useState({ firstName: "", lastName: "", phone: "", email: "" });
-  const [donationForm, setDonationForm] = useState({ contactId: "", amount: "", date: "", type: "Online" });
+  const [modal, setModal] = useState(null);
 
   const myGroup = groups[0]; // a manager is expected to manage one group in this simple model
 
@@ -18,126 +19,138 @@ export default function ManagerDashboard() {
     api.get("/contacts").then((res) => setContacts(res.data)).catch(() => {});
     api.get("/donations").then((res) => setDonations(res.data)).catch(() => {});
   }
-
   useEffect(loadAll, []);
 
-  async function addContact(e) {
-    e.preventDefault();
-    if (!myGroup) return;
-    try {
-      await api.post("/contacts", { ...contactForm, groupId: myGroup.id });
-      setContactForm({ firstName: "", lastName: "", phone: "", email: "" });
-      loadAll();
-    } catch (err) {
-      setError(err.response?.data?.error || "Could not add contact");
-    }
+  function closeModal() {
+    setModal(null);
+  }
+  function onSaved() {
+    closeModal();
+    loadAll();
   }
 
-  async function addDonation(e) {
-    e.preventDefault();
-    if (!myGroup) return;
+  async function deleteContact(id) {
+    if (!confirm("Delete this contact? This cannot be undone.")) return;
     try {
-      await api.post("/donations", {
-        ...donationForm,
-        groupId: myGroup.id,
-        amount: parseFloat(donationForm.amount),
-      });
-      setDonationForm({ contactId: "", amount: "", date: "", type: "Online" });
+      await api.delete(`/contacts/${id}`);
       loadAll();
     } catch (err) {
-      setError(err.response?.data?.error || "Could not add donation");
+      setError(err.response?.data?.error || "Could not delete contact");
     }
   }
 
   return (
     <Layout>
-      <h1 className="text-2xl font-semibold mb-6">My Group</h1>
-      {error && <p className="text-red-600 mb-4">{error}</p>}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-semibold text-gray-800">{myGroup ? myGroup.name : "My Group"}</h1>
+        {myGroup && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setModal({ type: "contact" })}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:border-brand-300"
+            >
+              <UserPlus size={15} /> Add Contact
+            </button>
+            <button
+              onClick={() => setModal({ type: "donation" })}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white"
+            >
+              <HeartHandshake size={15} /> Add Donation
+            </button>
+          </div>
+        )}
+      </div>
 
-      {myGroup && (
-        <div className="bg-white rounded-xl shadow p-6 mb-6 max-w-xs">
-          <p className="text-sm text-gray-500">{myGroup.name} — Total Raised</p>
-          <p className="text-3xl font-bold text-brand-700">
-            ${myGroup.totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </p>
-        </div>
+      {error && <p className="text-red-600 mb-4 text-sm">{error}</p>}
+
+      {!myGroup && (
+        <p className="text-gray-400">You haven't been assigned to a group yet — ask an admin to assign you as a manager.</p>
       )}
 
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Contacts */}
-        <section className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold mb-4">Contacts</h2>
-          <form onSubmit={addContact} className="grid grid-cols-2 gap-2 mb-4">
-            <input placeholder="First name" required value={contactForm.firstName}
-              onChange={(e) => setContactForm({ ...contactForm, firstName: e.target.value })}
-              className="border rounded px-2 py-1 text-sm" />
-            <input placeholder="Last name" required value={contactForm.lastName}
-              onChange={(e) => setContactForm({ ...contactForm, lastName: e.target.value })}
-              className="border rounded px-2 py-1 text-sm" />
-            <input placeholder="Phone" value={contactForm.phone}
-              onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
-              className="border rounded px-2 py-1 text-sm" />
-            <input placeholder="Email" value={contactForm.email}
-              onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-              className="border rounded px-2 py-1 text-sm" />
-            <button className="col-span-2 bg-brand-600 hover:bg-brand-700 text-white rounded py-1.5 text-sm">
-              Add Contact
-            </button>
-          </form>
-          <div className="max-h-72 overflow-y-auto text-sm divide-y">
-            {contacts.map((c) => (
-              <div key={c.id} className="py-2 flex justify-between">
-                <span>{c.firstName} {c.lastName}</span>
-                <span className={c.active ? "text-green-600" : "text-gray-400"}>
-                  {c.active ? "Active" : "Inactive"}
-                </span>
-              </div>
-            ))}
-            {contacts.length === 0 && <p className="text-gray-400 py-2">No contacts yet.</p>}
+      {myGroup && (
+        <>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 max-w-xs">
+            <p className="text-sm text-gray-500">Total Raised</p>
+            <p className="text-3xl font-bold text-brand-700">
+              ${myGroup.totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
           </div>
-        </section>
 
-        {/* Donations */}
-        <section className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold mb-4">Log a Donation</h2>
-          <form onSubmit={addDonation} className="grid grid-cols-2 gap-2 mb-4">
-            <select required value={donationForm.contactId}
-              onChange={(e) => setDonationForm({ ...donationForm, contactId: e.target.value })}
-              className="border rounded px-2 py-1 text-sm col-span-2">
-              <option value="">Select contact...</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
-              ))}
-            </select>
-            <input placeholder="Amount" type="number" step="0.01" required value={donationForm.amount}
-              onChange={(e) => setDonationForm({ ...donationForm, amount: e.target.value })}
-              className="border rounded px-2 py-1 text-sm" />
-            <input type="date" required value={donationForm.date}
-              onChange={(e) => setDonationForm({ ...donationForm, date: e.target.value })}
-              className="border rounded px-2 py-1 text-sm" />
-            <select value={donationForm.type}
-              onChange={(e) => setDonationForm({ ...donationForm, type: e.target.value })}
-              className="border rounded px-2 py-1 text-sm col-span-2">
-              <option>Online</option>
-              <option>Cash</option>
-              <option>Check</option>
-              <option>In-Kind</option>
-            </select>
-            <button className="col-span-2 bg-brand-600 hover:bg-brand-700 text-white rounded py-1.5 text-sm">
-              Add Donation
-            </button>
-          </form>
-          <div className="max-h-72 overflow-y-auto text-sm divide-y">
-            {donations.map((d) => (
-              <div key={d.id} className="py-2 flex justify-between">
-                <span>{d.contact.firstName} {d.contact.lastName}</span>
-                <span>${d.amount.toLocaleString()}</span>
+          <div className="grid lg:grid-cols-2 gap-6">
+            <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-5 py-3 bg-gray-50 border-b">
+                <h3 className="font-medium text-gray-700 text-sm">Contacts</h3>
               </div>
-            ))}
-            {donations.length === 0 && <p className="text-gray-400 py-2">No donations yet.</p>}
+              <div className="divide-y max-h-[28rem] overflow-y-auto">
+                {contacts.map((c) => (
+                  <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{c.firstName} {c.lastName}</p>
+                      <p className="text-xs text-gray-400 truncate">{c.email || c.phone || "—"}</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${c.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>
+                        {c.active ? "Active" : "Inactive"}
+                      </span>
+                      <button
+                        onClick={() => setModal({ type: "donation", data: c })}
+                        className="text-xs text-brand-600 hover:underline whitespace-nowrap"
+                      >
+                        + Donation
+                      </button>
+                      <button onClick={() => setModal({ type: "contact", data: c })} className="text-gray-400 hover:text-brand-600">
+                        <Pencil size={15} />
+                      </button>
+                      <button onClick={() => deleteContact(c.id)} className="text-gray-400 hover:text-red-600">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {contacts.length === 0 && <p className="px-5 py-4 text-sm text-gray-400">No contacts yet.</p>}
+              </div>
+            </section>
+
+            <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-5 py-3 bg-gray-50 border-b">
+                <h3 className="font-medium text-gray-700 text-sm">Donations</h3>
+              </div>
+              <div className="divide-y max-h-[28rem] overflow-y-auto">
+                {donations.map((d) => (
+                  <div key={d.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{d.contact.firstName} {d.contact.lastName}</p>
+                      <p className="text-xs text-gray-400">{d.type} · {new Date(d.date).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="text-sm font-semibold text-brand-700">${d.amount.toLocaleString()}</span>
+                      <button onClick={() => setModal({ type: "editDonation", data: d })} className="text-gray-400 hover:text-brand-600">
+                        <Pencil size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {donations.length === 0 && <p className="px-5 py-4 text-sm text-gray-400">No donations yet.</p>}
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
+        </>
+      )}
+
+      {modal?.type === "contact" && myGroup && (
+        <ContactModal contact={modal.data} lockGroupId={myGroup.id} onClose={closeModal} onSaved={onSaved} />
+      )}
+      {modal?.type === "donation" && (
+        <DonationModal
+          contact={modal.data && modal.data.firstName ? modal.data : undefined}
+          contacts={contacts}
+          onClose={closeModal}
+          onSaved={onSaved}
+        />
+      )}
+      {modal?.type === "editDonation" && (
+        <DonationModal donation={modal.data} onClose={closeModal} onSaved={onSaved} />
+      )}
     </Layout>
   );
 }

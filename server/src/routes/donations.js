@@ -32,9 +32,9 @@ router.get("/", async (req, res) => {
 
 // Create donation (admin or manager for their own group's contacts)
 router.post("/", authorize("admin", "manager"), async (req, res) => {
-  const { amount, contactId, groupId, date, type } = req.body;
-  if (!amount || !contactId || !groupId || !date || !type) {
-    return res.status(400).json({ error: "amount, contactId, groupId, date, and type are required" });
+  const { amount, contactId, groupId, type } = req.body;
+  if (!amount || !contactId || !groupId || !type) {
+    return res.status(400).json({ error: "amount, contactId, groupId, and type are required" });
   }
   if (req.user.role === "manager" && !(await managerOwnsGroup(req.user.id, groupId))) {
     return res.status(403).json({ error: "You can only add donations for your own group" });
@@ -44,7 +44,7 @@ router.post("/", authorize("admin", "manager"), async (req, res) => {
       amount: parseFloat(amount),
       contactId: Number(contactId),
       groupId: Number(groupId),
-      date: new Date(date),
+      date: new Date(), // system date at the moment the donation is entered
       type,
       createdById: req.user.id,
     },

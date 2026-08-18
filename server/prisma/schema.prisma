@@ -15,6 +15,7 @@ model User {
   id            Int      @id @default(autoincrement())
   email         String   @unique
   password      String
+  name          String?
   role          String   @default("user") // "admin" | "manager" | "user"
   contactId     Int?     @unique
   contact       Contact? @relation(fields: [contactId], references: [id])

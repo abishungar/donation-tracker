@@ -11,24 +11,24 @@ export default function Logs() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-semibold mb-6">Activity Logs</h1>
-      <div className="bg-white rounded-xl shadow overflow-x-auto">
+      <h1 className="text-2xl font-semibold text-gray-800 mb-6">Activity Logs</h1>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-100 text-left">
+          <thead className="bg-gray-50 text-left border-b">
             <tr>
-              <th className="p-3">When</th>
-              <th className="p-3">User</th>
-              <th className="p-3">Action</th>
-              <th className="p-3">Details</th>
+              <th className="p-3 font-medium text-gray-500">When</th>
+              <th className="p-3 font-medium text-gray-500">User</th>
+              <th className="p-3 font-medium text-gray-500">Action</th>
+              <th className="p-3 font-medium text-gray-500">Details</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y">
             {logs.map((l) => (
-              <tr key={l.id} className="border-t align-top">
-                <td className="p-3 whitespace-nowrap">{new Date(l.createdAt).toLocaleString()}</td>
-                <td className="p-3">{l.userEmail || "—"}</td>
-                <td className="p-3">{l.action}</td>
-                <td className="p-3 text-gray-500 max-w-xs break-words">{l.details}</td>
+              <tr key={l.id} className="align-top">
+                <td className="p-3 whitespace-nowrap text-gray-600">{new Date(l.createdAt).toLocaleString()}</td>
+                <td className="p-3 text-gray-600">{l.userEmail || "—"}</td>
+                <td className="p-3 text-gray-800 font-medium">{l.action}</td>
+                <td className="p-3 text-gray-400 max-w-xs break-words">{l.details}</td>
               </tr>
             ))}
             {logs.length === 0 && (
