@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-import { Menu, X, LogOut, LayoutDashboard, Users2, ScrollText, HeartHandshake } from "lucide-react";
+import { Menu, X, LogOut, LayoutDashboard, Users2, ScrollText, HeartHandshake, Settings as SettingsIcon } from "lucide-react";
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -27,6 +27,7 @@ export default function Layout({ children }) {
   if (user?.role === "user") {
     links.push({ to: "/me", label: "My Giving", icon: HeartHandshake });
   }
+  links.push({ to: "/settings", label: "Settings", icon: SettingsIcon });
 
   const displayName = user?.name || user?.email;
 

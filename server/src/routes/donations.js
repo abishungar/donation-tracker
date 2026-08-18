@@ -87,4 +87,47 @@ router.delete("/:id", authorize("admin", "manager"), async (req, res) => {
   res.json({ success: true });
 });
 
+// Create multiple donations at once (spreadsheet-style bulk entry).
+// Each row just needs { contactId, amount, type }. The group + date are
+// derived server-side per-row exactly like a single donation would be.
+router.post("/bulk", authorize("admin", "manager"), async (req, res) => {
+  const { rows } = req.body;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: "rows must be a non-empty array" });
+  }
+
+  const results = [];
+  for (const row of rows) {
+    const { contactId, amount, type } = row;
+    if (!contactId || !amount || !type) {
+      results.push({ contactId, error: "amount, contactId, and type are required" });
+      continue;
+    }
+    const contact = await prisma.contact.findUnique({ where: { id: Number(contactId) } });
+    if (!contact || !contact.groupId) {
+      results.push({ contactId, error: "Contact not found or has no group assigned" });
+      continue;
+    }
+    if (req.user.role === "manager" && !(await managerOwnsGroup(req.user.id, contact.groupId))) {
+      results.push({ contactId, error: "Not authorized for this contact's group" });
+      continue;
+    }
+    const donation = await prisma.donation.create({
+      data: {
+        amount: parseFloat(amount),
+        contactId: contact.id,
+        groupId: contact.groupId,
+        date: new Date(),
+        type,
+        createdById: req.user.id,
+      },
+    });
+    results.push({ contactId, donation });
+  }
+
+  const created = results.filter((r) => r.donation).length;
+  await writeLog(req, "BULK_CREATE_DONATIONS", { created, attempted: rows.length });
+  res.status(201).json({ results });
+});
+
 module.exports = router;

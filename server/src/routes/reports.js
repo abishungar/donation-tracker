@@ -39,4 +39,69 @@ router.get("/my-total", authenticate, async (req, res) => {
   res.json({ totalRaised, donations });
 });
 
+// Analytics for dashboard charts (admin: all groups, manager: own group(s) only)
+router.get("/analytics", async (req, res) => {
+  let groupIds = null;
+  if (req.user.role === "manager") {
+    const groups = await prisma.group.findMany({ where: { managerId: req.user.id } });
+    groupIds = groups.map((g) => g.id);
+  } else if (req.user.role === "user") {
+    return res.status(403).json({ error: "Not authorized" });
+  }
+
+  const where = groupIds ? { groupId: { in: groupIds } } : {};
+  const donations = await prisma.donation.findMany({
+    where,
+    include: { contact: true, group: true },
+  });
+
+  // Monthly totals for the last 6 months
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleString("default", { month: "short" }), total: 0 });
+  }
+  for (const d of donations) {
+    const dt = new Date(d.date);
+    const key = `${dt.getFullYear()}-${dt.getMonth()}`;
+    const bucket = months.find((m) => m.key === key);
+    if (bucket) bucket.total += d.amount;
+  }
+
+  // Totals by group
+  const byGroupMap = new Map();
+  for (const d of donations) {
+    const key = d.group.name;
+    byGroupMap.set(key, (byGroupMap.get(key) || 0) + d.amount);
+  }
+  const byGroup = Array.from(byGroupMap.entries()).map(([name, total]) => ({ name, total }));
+
+  // Top contacts
+  const byContactMap = new Map();
+  for (const d of donations) {
+    const key = d.contactId;
+    const existing = byContactMap.get(key) || {
+      name: `${d.contact.firstName} ${d.contact.lastName}`,
+      total: 0,
+    };
+    existing.total += d.amount;
+    byContactMap.set(key, existing);
+  }
+  const topContacts = Array.from(byContactMap.values())
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+
+  const totalRaised = donations.reduce((sum, d) => sum + d.amount, 0);
+  const donationCount = donations.length;
+
+  res.json({
+    totalRaised,
+    donationCount,
+    monthly: months.map((m) => ({ label: m.label, total: m.total })),
+    byGroup,
+    topContacts,
+  });
+});
+
 module.exports = router;

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Modal from "./Modal.jsx";
-import { Field, inputCls, PrimaryButton } from "./FormBits.jsx";
+import ContactSearchSelect from "./ContactSearchSelect.jsx";
+import { Field, MoneyInput, inputCls, PrimaryButton } from "./FormBits.jsx";
 import api from "../api";
 
 // Two modes:
@@ -80,13 +81,11 @@ export default function DonationModal({ donation, contact, contacts = [], onClos
           </div>
         ) : (
           <Field label="Contact">
-            <select required value={contactId} className={inputCls}
-              onChange={(e) => setContactId(e.target.value)}>
-              <option value="">Select contact...</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
-              ))}
-            </select>
+            <ContactSearchSelect
+              contacts={contacts}
+              value={contactId ? Number(contactId) : null}
+              onChange={(id) => setContactId(id ? String(id) : "")}
+            />
           </Field>
         )}
         {!isEdit && selectedContact && (
@@ -99,8 +98,7 @@ export default function DonationModal({ donation, contact, contacts = [], onClos
           </p>
         )}
         <Field label="Amount">
-          <input type="number" step="0.01" min="0" required value={amount} className={inputCls}
-            onChange={(e) => setAmount(e.target.value)} />
+          <MoneyInput required value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
         <Field label="Type">
           <select value={type} className={inputCls} onChange={(e) => setType(e.target.value)}>

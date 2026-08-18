@@ -4,12 +4,15 @@ import ContactModal from "../components/ContactModal.jsx";
 import GroupModal from "../components/GroupModal.jsx";
 import DonationModal from "../components/DonationModal.jsx";
 import UserModal from "../components/UserModal.jsx";
+import ContactDetailModal from "../components/ContactDetailModal.jsx";
+import BulkDonationEntry from "../components/BulkDonationEntry.jsx";
+import Analytics from "../components/Analytics.jsx";
 import api from "../api";
 import {
-  UserPlus, Users2, HeartHandshake, Pencil, Trash2, ShieldCheck,
+  UserPlus, Users2, HeartHandshake, Pencil, Trash2, ShieldCheck, Rows3,
 } from "lucide-react";
 
-const TABS = ["Overview", "Contacts", "Groups", "Donations", "Users"];
+const TABS = ["Overview", "Analytics", "Contacts", "Groups", "Donations", "Users"];
 
 export default function AdminDashboard() {
   const [tab, setTab] = useState("Overview");
@@ -57,8 +60,6 @@ export default function AdminDashboard() {
     }
   }
 
-  const managers = users.filter((u) => u.role === "manager");
-
   const contactsByGroup = useMemo(() => {
     const groupsMap = new Map();
     for (const g of groups) groupsMap.set(g.id, { group: g, contacts: [] });
@@ -79,6 +80,7 @@ export default function AdminDashboard() {
         <div className="flex flex-wrap gap-2">
           <QuickAction icon={UserPlus} label="Add Contact" onClick={() => setModal({ type: "contact" })} />
           <QuickAction icon={Users2} label="Add Group" onClick={() => setModal({ type: "group" })} />
+          <QuickAction icon={Rows3} label="Bulk Add Donations" onClick={() => setModal({ type: "bulkDonation" })} />
           <QuickAction icon={HeartHandshake} label="Add Donation" onClick={() => setModal({ type: "donation" })} primary />
         </div>
       </div>
@@ -115,6 +117,8 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {tab === "Analytics" && <Analytics />}
+
       {tab === "Contacts" && (
         <div className="space-y-6">
           {contactsByGroup.map(({ group, contacts: groupContacts }) => (
@@ -127,7 +131,12 @@ export default function AdminDashboard() {
                 {groupContacts.map((c) => (
                   <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{c.firstName} {c.lastName}</p>
+                      <button
+                        onClick={() => setModal({ type: "contactDetail", data: c })}
+                        className="text-sm font-medium text-gray-800 hover:text-brand-600 truncate text-left"
+                      >
+                        {c.firstName} {c.lastName}
+                      </button>
                       <p className="text-xs text-gray-400 truncate">{c.email || c.phone || "—"}</p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -237,7 +246,7 @@ export default function AdminDashboard() {
         <ContactModal contact={modal.data} groups={groups} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "group" && (
-        <GroupModal group={modal.data} managers={managers} onClose={closeModal} onSaved={onSaved} />
+        <GroupModal group={modal.data} users={users} contacts={contacts} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "donation" && (
         <DonationModal contact={modal.data && modal.data.firstName ? modal.data : undefined} contacts={contacts} onClose={closeModal} onSaved={onSaved} />
@@ -247,6 +256,12 @@ export default function AdminDashboard() {
       )}
       {modal?.type === "user" && (
         <UserModal contacts={contacts} onClose={closeModal} onSaved={onSaved} />
+      )}
+      {modal?.type === "contactDetail" && (
+        <ContactDetailModal contactId={modal.data.id} onClose={closeModal} />
+      )}
+      {modal?.type === "bulkDonation" && (
+        <BulkDonationEntry contacts={contacts} onClose={closeModal} onAnySaved={loadAll} />
       )}
     </Layout>
   );

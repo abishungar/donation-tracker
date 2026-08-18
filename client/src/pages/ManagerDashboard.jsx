@@ -2,8 +2,10 @@ import React, { useEffect, useState } from "react";
 import Layout from "../components/Layout.jsx";
 import ContactModal from "../components/ContactModal.jsx";
 import DonationModal from "../components/DonationModal.jsx";
+import ContactDetailModal from "../components/ContactDetailModal.jsx";
+import BulkDonationEntry from "../components/BulkDonationEntry.jsx";
 import api from "../api";
-import { UserPlus, HeartHandshake, Pencil, Trash2 } from "lucide-react";
+import { UserPlus, HeartHandshake, Pencil, Trash2, Rows3 } from "lucide-react";
 
 export default function ManagerDashboard() {
   const [groups, setGroups] = useState([]);
@@ -52,6 +54,12 @@ export default function ManagerDashboard() {
               <UserPlus size={15} /> Add Contact
             </button>
             <button
+              onClick={() => setModal({ type: "bulkDonation" })}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:border-brand-300"
+            >
+              <Rows3 size={15} /> Bulk Add Donations
+            </button>
+            <button
               onClick={() => setModal({ type: "donation" })}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white"
             >
@@ -85,7 +93,12 @@ export default function ManagerDashboard() {
                 {contacts.map((c) => (
                   <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{c.firstName} {c.lastName}</p>
+                      <button
+                        onClick={() => setModal({ type: "contactDetail", data: c })}
+                        className="text-sm font-medium text-gray-800 hover:text-brand-600 truncate text-left"
+                      >
+                        {c.firstName} {c.lastName}
+                      </button>
                       <p className="text-xs text-gray-400 truncate">{c.email || c.phone || "—"}</p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -150,6 +163,12 @@ export default function ManagerDashboard() {
       )}
       {modal?.type === "editDonation" && (
         <DonationModal donation={modal.data} onClose={closeModal} onSaved={onSaved} />
+      )}
+      {modal?.type === "contactDetail" && (
+        <ContactDetailModal contactId={modal.data.id} onClose={closeModal} />
+      )}
+      {modal?.type === "bulkDonation" && (
+        <BulkDonationEntry contacts={contacts} onClose={closeModal} onAnySaved={loadAll} />
       )}
     </Layout>
   );

@@ -94,4 +94,22 @@ router.delete("/:id", authorize("admin", "manager"), async (req, res) => {
   res.json({ success: true });
 });
 
+// Get one contact with its full donation history
+router.get("/:id", authorize("admin", "manager"), async (req, res) => {
+  const id = Number(req.params.id);
+  const contact = await prisma.contact.findUnique({
+    where: { id },
+    include: {
+      group: true,
+      donations: { orderBy: { date: "desc" }, include: { group: true } },
+    },
+  });
+  if (!contact) return res.status(404).json({ error: "Contact not found" });
+  if (req.user.role === "manager" && !(await managerOwnsGroup(req.user.id, contact.groupId))) {
+    return res.status(403).json({ error: "You can only view contacts in your own group" });
+  }
+  const totalRaised = contact.donations.reduce((sum, d) => sum + d.amount, 0);
+  res.json({ ...contact, totalRaised });
+});
+
 module.exports = router;
