@@ -9,7 +9,7 @@ services:
     name: donation-tracker
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build && npx prisma migrate deploy --schema=server/prisma/schema.prisma
+    buildCommand: npm install && npm run build && npx prisma migrate deploy --schema=server/prisma/schema.prisma && npm run seed -w server
     startCommand: npm run start
     envVars:
       - key: NODE_VERSION
