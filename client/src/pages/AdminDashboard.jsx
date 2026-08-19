@@ -71,7 +71,8 @@ export default function AdminDashboard() {
           <QuickAction icon={UserPlus} label="Add Contact" onClick={() => setModal({ type: "contact" })} />
           <QuickAction icon={Users2} label="Add Group" onClick={() => setModal({ type: "group" })} />
           <QuickAction icon={Rows3} label="Bulk Add Donations" onClick={() => setModal({ type: "bulkDonation" })} />
-          <QuickAction icon={HeartHandshake} label="Add Donation" onClick={() => setModal({ type: "donation" })} primary />\n          {user?.isMainAdmin && <QuickAction icon={Mail} label="Email Settings" onClick={() => setModal({ type: "emailSettings" })} />}
+          <QuickAction icon={HeartHandshake} label="Add Donation" onClick={() => setModal({ type: "donation" })} primary />
+          {user?.isMainAdmin && <QuickAction icon={Mail} label="Email Settings" onClick={() => setModal({ type: "emailSettings" })} />}
         </div>
       </div>
 

@@ -40,7 +40,7 @@ router.get("/:id", authorize("admin", "manager"), async (req, res) => {
   const group = await prisma.group.findUnique({ where:{id}, include:{ manager:{select:{id:true,email:true,name:true}}, contacts:{orderBy:{firstName:"asc"}}, donations:{include:{contact:true},orderBy:{date:"desc"}} } });
   if (!group) return res.status(404).json({error:"Group not found"});
   if (req.user.role === "manager" && group.managerId !== req.user.id) return res.status(403).json({error:"Access denied"});
-  const totalRaised = group.donations.reduce((sum,d)=>sum+d.amount,0);
+  const totalRaised = group.donations.reduce((sum,d)=>sum+Number(d.amount || 0),0);
   res.json({...group,totalRaised});
 });
 
