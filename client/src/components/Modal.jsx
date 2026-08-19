@@ -5,7 +5,7 @@ export default function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-0 sm:px-4">
       <div
-        className={`bg-white w-full ${wide ? "sm:max-w-lg" : "sm:max-w-md"} rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto animate-in`}
+        className={`bg-white w-full ${wide ? "sm:max-w-4xl lg:max-w-5xl" : "sm:max-w-md"} rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto animate-in`}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
           <h3 className="font-semibold text-gray-800">{title}</h3>
