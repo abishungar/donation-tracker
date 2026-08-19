@@ -1,72 +1,29 @@
-import React, { useState } from "react";
+import React,{useEffect,useState}from "react";
 import Layout from "../components/Layout.jsx";
-import { Field, inputCls, PrimaryButton } from "../components/FormBits.jsx";
+import { Field,inputCls,PrimaryButton } from "../components/FormBits.jsx";
 import api from "../api";
-import { useAuth } from "../context/AuthContext.jsx";
+import {useAuth} from "../context/AuthContext.jsx";
 
-export default function Settings() {
-  const { user } = useAuth();
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-    if (newPassword !== confirmPassword) {
-      setError("New passwords don't match");
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.put("/auth/change-password", { currentPassword, newPassword });
-      setSuccess("Password updated.");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (err) {
-      setError(err.response?.data?.error || "Could not update password");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Layout>
-      <h1 className="text-2xl font-semibold text-gray-800 mb-6">Account Settings</h1>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-md mb-6">
-        <p className="text-sm text-gray-500">Signed in as</p>
-        <p className="text-gray-800 font-medium">{user?.name || user?.email}</p>
-        <p className="text-xs text-gray-400">{user?.email} · {user?.role}</p>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-md">
-        <h2 className="font-medium text-gray-700 mb-4">Change Password</h2>
-        <form onSubmit={handleSubmit}>
-          <Field label="Current password">
-            <input type="password" required value={currentPassword} className={inputCls}
-              onChange={(e) => setCurrentPassword(e.target.value)} />
-          </Field>
-          <Field label="New password">
-            <input type="password" required minLength={6} value={newPassword} className={inputCls}
-              onChange={(e) => setNewPassword(e.target.value)} />
-          </Field>
-          <Field label="Confirm new password">
-            <input type="password" required value={confirmPassword} className={inputCls}
-              onChange={(e) => setConfirmPassword(e.target.value)} />
-          </Field>
-          {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-          {success && <p className="text-sm text-green-600 mb-3">{success}</p>}
-          <PrimaryButton type="submit" disabled={saving}>
-            {saving ? "Saving..." : "Update Password"}
-          </PrimaryButton>
-        </form>
-      </div>
-    </Layout>
-  );
+export default function Settings({mainAdminOnly=false}){
+ const {user}=useAuth();
+ const [smtp,setSmtp]=useState({smtp_email:"",smtp_app_password:"",sender_name:"Donation Tracker"});
+ const [status,setStatus]=useState(""); const [error,setError]=useState("");
+ const [currentPassword,setCurrentPassword]=useState(""),[newPassword,setNewPassword]=useState(""),[confirmPassword,setConfirmPassword]=useState("");
+ const [importText,setImportText]=useState(""),[mapping,setMapping]=useState({firstName:"firstName",lastName:"lastName",phone:"phone",email:"email",group:"group",active:"active"});
+ const isMain=!!user?.isMainAdmin;
+ useEffect(()=>{if(isMain) api.get("/admin/settings").then(r=>setSmtp(x=>({...x,...r.data}))).catch(()=>{})},[isMain]);
+ async function saveSmtp(e){e.preventDefault();setError("");try{await api.put("/admin/settings",smtp);setStatus("Email settings saved.");}catch(e){setError(e.response?.data?.error||"Could not save settings")}}
+ async function changePassword(e){e.preventDefault();if(newPassword!==confirmPassword){setError("New passwords don't match");return}try{await api.put("/auth/change-password",{currentPassword,newPassword});setStatus("Password updated.");setCurrentPassword("");setNewPassword("");setConfirmPassword("")}catch(e){setError(e.response?.data?.error||"Could not update password")}}
+ function exportData(){api.get("/admin/export").then(r=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(r.data,null,2)],{type:"application/json"}));a.download="donation-tracker-export.json";a.click();URL.revokeObjectURL(a.href)}).catch(e=>setError(e.response?.data?.error||"Export failed"))}
+ async function importData(){setError("");try{let rows=JSON.parse(importText);if(!Array.isArray(rows))throw new Error("The JSON must be an array of rows.");const r=await api.post("/admin/import",{rows,mapping});setStatus(`Import complete: ${r.data.created} contacts processed.`)}catch(e){setError(e.response?.data?.error||e.message||"Import failed")}}
+ const account=<div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-md"><h2 className="font-semibold text-gray-800 mb-4">Change Password</h2><form onSubmit={changePassword}><Field label="Current password"><input type="password" required value={currentPassword} className={inputCls} onChange={e=>setCurrentPassword(e.target.value)}/></Field><Field label="New password"><input type="password" required minLength={6} value={newPassword} className={inputCls} onChange={e=>setNewPassword(e.target.value)}/></Field><Field label="Confirm new password"><input type="password" required value={confirmPassword} className={inputCls} onChange={e=>setConfirmPassword(e.target.value)}/></Field><PrimaryButton>Update Password</PrimaryButton></form></div>;
+ return <Layout><div className="max-w-5xl"><div className="mb-6"><h1 className="text-2xl font-semibold text-gray-800">{mainAdminOnly?"Main Admin Settings":"Account Settings"}</h1><p className="text-sm text-gray-500 mt-1">{mainAdminOnly?"System email, import/export, and Main Admin controls.":"Manage your account."}</p></div>{error&&<p className="mb-4 text-sm text-red-600">{error}</p>}{status&&<p className="mb-4 text-sm text-green-600">{status}</p>}
+ {!mainAdminOnly&&account}
+ {mainAdminOnly&&isMain&&<div className="grid lg:grid-cols-2 gap-6">
+ <form onSubmit={saveSmtp} className="bg-white rounded-2xl border shadow-sm p-6"><h2 className="text-lg font-semibold mb-1">Gmail SMTP</h2><p className="text-sm text-gray-500 mb-4">Use a Google App Password to send password setup and reset emails.</p><Field label="Gmail address"><input type="email" required value={smtp.smtp_email||""} className={inputCls} onChange={e=>setSmtp({...smtp,smtp_email:e.target.value})}/></Field><Field label="Google App Password"><input type="password" placeholder="Leave blank to keep current password" value={smtp.smtp_app_password||""} className={inputCls} onChange={e=>setSmtp({...smtp,smtp_app_password:e.target.value})}/></Field><Field label="Sender name"><input value={smtp.sender_name||""} className={inputCls} onChange={e=>setSmtp({...smtp,sender_name:e.target.value})}/></Field><PrimaryButton>Save Email Settings</PrimaryButton></form>
+ <div className="space-y-6"><div className="bg-white rounded-2xl border shadow-sm p-6"><h2 className="text-lg font-semibold">Export Data</h2><p className="text-sm text-gray-500 my-2">Download contacts, groups, users, and donations as one backup file.</p><PrimaryButton type="button" onClick={exportData}>Export System Data</PrimaryButton></div>
+ <div className="bg-white rounded-2xl border shadow-sm p-6"><h2 className="text-lg font-semibold mb-1">Import Data</h2><p className="text-sm text-gray-500 mb-3">Paste an array of rows, then map your column names below.</p><textarea value={importText} onChange={e=>setImportText(e.target.value)} placeholder={'[{"First Name":"John","Last Name":"Doe","Email":"john@example.com","Group":"Group 1"}]'} className="w-full h-32 border rounded-xl p-3 text-sm font-mono mb-3"/>
+ <div className="grid grid-cols-2 gap-2">{Object.entries(mapping).map(([key,val])=><label key={key} className="text-xs text-gray-500 capitalize">{key}<input value={val} onChange={e=>setMapping({...mapping,[key]:e.target.value})} className="mt-1 w-full border rounded-lg px-2 py-2 text-sm text-gray-700"/></label>)}</div><button type="button" onClick={importData} className="mt-4 bg-brand-600 text-white px-4 py-2.5 rounded-xl font-semibold">Import Data</button></div></div>
+ </div>}
+ {mainAdminOnly&&!isMain&&<div className="bg-red-50 border border-red-100 rounded-2xl p-5 text-red-700">Main Admin permission is required.</div>}</div></Layout>
 }

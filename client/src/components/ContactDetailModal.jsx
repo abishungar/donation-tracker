@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import Modal from "./Modal.jsx";
 import api from "../api";
 
-export default function ContactDetailModal({ contactId, onClose }) {
+export default function ContactDetailModal({ contactId, onClose, onAddDonation }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
@@ -45,7 +45,10 @@ export default function ContactDetailModal({ contactId, onClose }) {
             </span>
           </div>
 
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Donation History</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-gray-700">Donation History</h4>
+            <button onClick={() => onAddDonation?.(data)} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm shadow-sm">+ Add Donation</button>
+          </div>
           <div className="border border-gray-100 rounded-xl divide-y max-h-64 overflow-y-auto">
             {data.donations.map((d) => (
               <div key={d.id} className="px-4 py-2.5 flex items-center justify-between text-sm">

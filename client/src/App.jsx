@@ -62,6 +62,7 @@ export default function App() {
           </Protected>
         }
       />
+      <Route path="/main-admin" element={<Protected roles={["admin"]}><Settings mainAdminOnly /></Protected>} />
       <Route
         path="/settings"
         element={

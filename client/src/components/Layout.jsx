@@ -18,7 +18,8 @@ export default function Layout({ children }) {
   if (user?.role === "admin") {
     links.push(
       { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/admin/logs", label: "Activity Logs", icon: ScrollText }
+      { to: "/admin/logs", label: "Activity Logs", icon: ScrollText },
+      ...(user?.isMainAdmin ? [{ to: "/main-admin", label: "Main Admin Settings", icon: SettingsIcon }] : [])
     );
   }
   if (user?.role === "manager") {
