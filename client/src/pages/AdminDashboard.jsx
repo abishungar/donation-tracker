@@ -18,6 +18,7 @@ import {
 const TABS = ["Overview", "Analytics", "Contacts", "Groups", "Donations", "Users"];
 
 export default function AdminDashboard() {
+  const { user } = useAuth();
   const [tab, setTab] = useState("Overview");
   const [groups, setGroups] = useState([]);
   const [users, setUsers] = useState([]);
@@ -145,7 +146,7 @@ export default function AdminDashboard() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-brand-700">${d.amount.toLocaleString()}</span>
+                <span className="text-sm font-semibold text-brand-700">${Number(d.amount || 0).toLocaleString()}</span>
                 <button onClick={() => setModal({ type: "editDonation", data: d })} className="text-gray-400 hover:text-brand-600">
                   <Pencil size={15} />
                 </button>
