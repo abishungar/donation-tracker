@@ -22,10 +22,13 @@ router.get("/", authorize("admin", "manager"), async (req, res) => {
   }
   const contacts = await prisma.contact.findMany({
     where,
-    include: { group: true },
+    include: { group: true, donations: { select: { amount: true } } },
     orderBy: { lastName: "asc" },
   });
-  res.json(contacts);
+  res.json(contacts.map(({ donations, ...contact }) => ({
+    ...contact,
+    totalDonated: donations.reduce((sum, donation) => sum + donation.amount, 0),
+  })));
 });
 
 // Create contact

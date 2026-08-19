@@ -22,6 +22,8 @@ export default function AdminDashboard() {
   const [contacts, setContacts] = useState([]);
   const [donations, setDonations] = useState([]);
   const [error, setError] = useState("");
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactSort, setContactSort] = useState("first");
 
   const [modal, setModal] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'contact'|'group'|'donation'|'user', data? }
@@ -106,68 +108,26 @@ export default function AdminDashboard() {
       {tab === "Analytics" && <Analytics />}
 
       {tab === "Contacts" && (
-        <div className="space-y-6">
-          {contactsByGroup.map(({ group, contacts: groupContacts }) => (
-            <section key={group?.id ?? "none"} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="px-5 py-3 bg-gray-50 border-b flex items-center justify-between">
-                <h3 className="font-medium text-gray-700 text-sm">{group?.name || "No Group"}</h3>
-                <span className="text-xs text-gray-400">{groupContacts.length} contact{groupContacts.length !== 1 && "s"}</span>
-              </div>
-              <div className="divide-y">
-                {groupContacts.map((c) => (
-                  <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <button
-                        onClick={() => setModal({ type: "contactDetail", data: c })}
-                        className="text-sm font-medium text-gray-800 hover:text-brand-600 truncate text-left"
-                      >
-                        {c.firstName} {c.lastName}
-                      </button>
-                      <p className="text-xs text-gray-400 truncate">{c.email || c.phone || "—"}</p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${c.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>
-                        {c.active ? "Active" : "Inactive"}
-                      </span>
-                      <button
-                        onClick={() => setModal({ type: "donation", data: c })}
-                        className="text-xs text-brand-600 hover:underline whitespace-nowrap"
-                      >
-                        + Donation
-                      </button>
-                      <button onClick={() => setModal({ type: "contact", data: c })} className="text-gray-400 hover:text-brand-600">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => setDeleteTarget({type:"contact",id:c.id,name:`${c.firstName} ${c.lastName}`})} className="text-gray-400 hover:text-red-600">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {groupContacts.length === 0 && <p className="px-5 py-4 text-sm text-gray-400">No contacts here yet.</p>}
-              </div>
-            </section>
-          ))}
-          {contacts.length === 0 && <p className="text-gray-400">No contacts yet — add one to get started.</p>}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-4 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            <input value={contactSearch} onChange={e=>setContactSearch(e.target.value)} placeholder="Search contacts..." className="border rounded-xl px-4 py-2.5 w-full sm:max-w-md focus:ring-2 focus:ring-brand-200 outline-none" />
+            <select value={contactSort} onChange={e=>setContactSort(e.target.value)} className="border rounded-xl px-3 py-2.5"><option value="first">Sort by first name</option><option value="last">Sort by last name</option><option value="money">Most money given</option></select>
+          </div>
+          <div className="divide-y">{[...contacts].filter(c=>`${c.firstName} ${c.lastName} ${c.email||""}`.toLowerCase().includes(contactSearch.toLowerCase())).sort((a,b)=>contactSort==="money"?(b.totalDonated||0)-(a.totalDonated||0):contactSort==="last"?`${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`):`${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)).map(c=><div key={c.id} onClick={()=>setModal({type:"contactDetail",data:c})} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-brand-50/40 cursor-pointer">
+            <div><p className="font-semibold text-gray-800">{c.firstName} {c.lastName}</p><p className="text-xs text-gray-400">{c.group?.name||"No group"} · {c.email||c.phone||"No contact info"}</p></div>
+            <button onClick={e=>{e.stopPropagation();setModal({type:"donation",data:c})}} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl font-semibold whitespace-nowrap">+ Add Donation</button>
+          </div>)}</div>
         </div>
       )}
 
       {tab === "Groups" && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y">
-          {groups.map((g) => (
-            <div key={g.id} className="px-5 py-3.5 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-gray-800">{g.name}</p>
-                <p className="text-xs text-gray-400">
-                  Manager: {g.manager?.name || g.manager?.email || "Unassigned"} · ${g.totalRaised.toLocaleString()} raised · ${(g.monthRaised || 0).toLocaleString()} this month
-                </p>
-              </div>
-              <button onClick={() => setModal({ type: "group", data: g })} className="text-gray-400 hover:text-brand-600">
-                <Pencil size={15} />
-              </button>
-            </div>
-          ))}
-          {groups.length === 0 && <p className="px-5 py-4 text-sm text-gray-400">No groups yet.</p>}
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {groups.map(g=><button key={g.id} onClick={async()=>{try{const r=await api.get(`/groups/${g.id}`);setModal({type:"groupDetail",data:r.data})}catch{}}} className="text-left bg-white rounded-2xl border shadow-sm p-5 hover:border-brand-300 hover:shadow transition">
+            <div className="flex justify-between gap-3"><div><h3 className="font-semibold text-gray-800">{g.name}</h3><p className="text-xs text-gray-400 mt-1">{g._count?.contacts||0} contacts · {g.manager?.name||g.manager?.email||"No owner assigned"}</p></div><Pencil size={16} className="text-gray-300"/></div>
+            <div className="mt-5"><p className="text-xs uppercase tracking-wide text-gray-400">Total raised</p><p className="text-2xl font-bold text-brand-700">${Number(g.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p><p className="text-xs text-gray-400 mt-1">${Number(g.monthRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})} this month</p></div>
+            <p className="mt-4 text-sm text-brand-600 font-medium">View contacts & donations →</p>
+          </button>)}
+          {groups.length===0&&<p className="text-gray-400">No groups yet.</p>}
         </div>
       )}
 
@@ -246,6 +206,7 @@ export default function AdminDashboard() {
       {modal?.type === "contactDetail" && (
         <ContactDetailModal contactId={modal.data.id} onClose={closeModal} />
       )}
+      {modal?.type === "groupDetail" && (<div className="fixed inset-0 z-50 bg-black/40 p-4 overflow-auto"><div className="bg-white rounded-2xl max-w-4xl mx-auto my-8 shadow-xl"><div className="p-5 border-b flex justify-between"><div><h2 className="text-xl font-bold">{modal.data.name}</h2><p className="text-sm text-gray-500">Owner: {modal.data.manager?.name||modal.data.manager?.email||"Unassigned"} · Total raised: ${Number(modal.data.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p></div><button onClick={closeModal}>Close</button></div><div className="p-5 grid md:grid-cols-2 gap-6"><div><h3 className="font-semibold mb-3">Contacts ({modal.data.contacts.length})</h3><div className="space-y-2 max-h-80 overflow-auto">{modal.data.contacts.map(c=><button key={c.id} onClick={()=>setModal({type:"contactDetail",data:c})} className="block w-full text-left border rounded-xl p-3 hover:bg-gray-50">{c.firstName} {c.lastName}</button>)}</div></div><div><h3 className="font-semibold mb-3">Donations</h3><div className="space-y-2 max-h-80 overflow-auto">{modal.data.donations.map(d=><div key={d.id} className="border rounded-xl p-3 flex justify-between"><span>{d.contact.firstName} {d.contact.lastName}</span><b>${Number(d.amount).toFixed(2)}</b></div>)}{modal.data.donations.length===0&&<p className="text-gray-400">No donations yet.</p>}</div></div></div></div></div>)}
       {deleteTarget && <ConfirmDelete title={`Delete ${deleteTarget.type}?`} message={`Are you sure you want to permanently delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.type==="contact" ? deleteContact(deleteTarget.id) : deleteUser(deleteTarget.id)} />}
 
       {modal?.type === "bulkDonation" && (
