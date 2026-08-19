@@ -26,6 +26,7 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "role must be admin, manager, or user" });
   }
 
+  if (isMainAdmin) { const me=await prisma.user.findUnique({where:{id:req.user.id}}); if(!me?.isMainAdmin) return res.status(403).json({error:"Only Main Admin can create another Main Admin"}); }
   const hash = await bcrypt.hash(password, 10);
   try {
     const user = await prisma.user.create({
@@ -55,8 +56,10 @@ router.put("/:id", async (req, res) => {
   if (name !== undefined) data.name = name || null;
   if (password) data.password = await bcrypt.hash(password, 10);
   if (isMainAdmin !== undefined) {
+    const me=await prisma.user.findUnique({where:{id:req.user.id}});
+    if (!me?.isMainAdmin) return res.status(403).json({error:"Only Main Admin can change Main Admin status"});
     const lock=await prisma.appSetting.findUnique({where:{key:"lock_main_admin"}});
-    if (lock?.value === "true" && !req.user.isMainAdmin) return res.status(403).json({error:"Main Admin access is locked by Main Admin settings"});
+    if (lock?.value === "true" && !me.isMainAdmin) return res.status(403).json({error:"Main Admin changes are locked"});
     data.isMainAdmin=!!isMainAdmin;
   }
 

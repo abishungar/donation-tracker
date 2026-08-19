@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import Modal from "./Modal.jsx";
 import { Field, inputCls, PrimaryButton } from "./FormBits.jsx";
 import api from "../api";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export default function UserModal({ contacts, user, onClose, onSaved }) {
+  const { user: currentUser } = useAuth();
   const [form, setForm] = useState({ name: user?.name||"", email: user?.email||"", password: "", role: user?.role||"user", contactId: user?.contactId||"", isMainAdmin:!!user?.isMainAdmin });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -55,7 +57,7 @@ export default function UserModal({ contacts, user, onClose, onSaved }) {
             </select>
           </Field>
         )}
-        {form.role === "admin" && <label className="flex items-center gap-2 text-sm mb-4"><input type="checkbox" checked={form.isMainAdmin} onChange={e=>setForm({...form,isMainAdmin:e.target.checked})}/> Main Admin</label>}
+        {form.role === "admin" && <label className="flex items-center gap-2 text-sm mb-4"><input type="checkbox" disabled={!currentUser?.isMainAdmin} checked={form.isMainAdmin} onChange={e=>setForm({...form,isMainAdmin:e.target.checked})}/> Main Admin{!currentUser?.isMainAdmin && <span className="text-xs text-gray-400">(Main Admin only)</span>}</label>}
         {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
         <div className="flex gap-2 justify-end pt-1">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">

@@ -12,6 +12,7 @@ const donationRoutes = require("./routes/donations");
 const reportRoutes = require("./routes/reports");
 const logRoutes = require("./routes/logs");
 const adminRoutes = require("./routes/admin");
+const paymentRoutes = require("./routes/payments");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -27,6 +28,7 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/logs", logRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/payments", paymentRoutes);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 

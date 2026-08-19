@@ -2,6 +2,7 @@ const express = require("express");
 const prisma = require("../db");
 const { authenticate, authorize } = require("../middleware/auth");
 const { writeLog } = require("../utils/log");
+const { sendMail, donationReceipt } = require("../utils/mailer");
 
 const router = express.Router();
 router.use(authenticate);
@@ -50,6 +51,8 @@ router.post("/", authorize("admin", "manager"), async (req, res) => {
     },
   });
   await writeLog(req, "CREATE_DONATION", { id: donation.id, amount, contactId, groupId });
+  const contact = await prisma.contact.findUnique({ where: { id: Number(contactId) } });
+  if (contact?.email) { try { await sendMail(contact.email, "Donation receipt", donationReceipt(`${contact.firstName} ${contact.lastName}`, donation.amount, null)); } catch (e) { console.error("Donation receipt email failed:", e.message); } }
   res.status(201).json(donation);
 });
 
