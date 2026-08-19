@@ -12,8 +12,24 @@ export default function Settings({mainAdminOnly=false}){
  const [mapping,setMapping]=useState({firstName:"",lastName:"",phone:"",email:"",group:"",active:""}); const [sheetRows,setSheetRows]=useState([]); const [headers,setHeaders]=useState([]);
  const [currentPassword,setCurrentPassword]=useState(""),[newPassword,setNewPassword]=useState(""),[confirmPassword,setConfirmPassword]=useState("");
  const isMain=!!user?.isMainAdmin;
- useEffect(()=>{if(isMain&&mainAdminOnly){api.get("/admin/settings").then(r=>{setSmtp(x=>({...x,...r.data}));setSola(x=>({...x,...r.data}))}).catch(()=>{});if(!window.XLSX){const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";sc.onload=()=>{};document.head.appendChild(sc);}},[isMain,mainAdminOnly]);
- async function saveAll(e){e.preventDefault();setError("");try{await api.put("/admin/settings",{...smtp,...sola});setStatus("Settings saved.");}catch(e){setError(e.response?.data?.error||"Could not save settings")}}
+useEffect(() => {
+  if (!(isMain && mainAdminOnly)) return;
+
+  api.get("/admin/settings")
+    .then((r) => {
+      setSmtp((x) => ({ ...x, ...r.data }));
+      setSola((x) => ({ ...x, ...r.data }));
+    })
+    .catch(() => {});
+
+  if (!window.XLSX) {
+    const sc = document.createElement("script");
+    sc.src =
+      "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    sc.onload = () => {};
+    document.head.appendChild(sc);
+  }
+}, [isMain, mainAdminOnly]); async function saveAll(e){e.preventDefault();setError("");try{await api.put("/admin/settings",{...smtp,...sola});setStatus("Settings saved.");}catch(e){setError(e.response?.data?.error||"Could not save settings")}}
  async function sendTest(){setError("");try{await api.post("/admin/test-email",{to:testEmail});setStatus("Test email sent.")}catch(e){setError(e.response?.data?.error||"SMTP test failed")}}
  function exportData(){api.get("/admin/export").then(r=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(r.data,null,2)],{type:"application/json"}));a.download="donation-tracker-export.json";a.click();URL.revokeObjectURL(a.href)}).catch(e=>setError(e.response?.data?.error||"Export failed"))}
  function handleSheet(file){if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const XLSX=window.XLSX;if(!XLSX)throw new Error("Spreadsheet engine is still loading. Please try again.");const wb=XLSX.read(e.target.result,{type:"array"});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:""});setSheetRows(rows);const hs=rows.length?Object.keys(rows[0]):[];setHeaders(hs);const find=(terms)=>hs.find(h=>terms.some(t=>h.toLowerCase().replace(/[^a-z]/g,"").includes(t)))||"";setMapping({firstName:find(["firstname","fname","first"]),lastName:find(["lastname","lname","last"]),phone:find(["phone","mobile"]),email:find(["email"]),group:find(["group"]),active:find(["active","status"])});setStatus(`${rows.length} rows loaded. Map the columns and import.`)}catch(err){setError("Could not read the sheet. Use CSV or XLSX.")}};reader.readAsArrayBuffer(file)}
