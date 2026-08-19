@@ -3,6 +3,7 @@ import Layout from "../components/Layout.jsx";
 import EmailSettingsModal from "../components/EmailSettingsModal.jsx";
 import api from "../api";
 import { Mail, ShieldCheck, Save } from "lucide-react";
+import ImportExportPanel from "../components/ImportExportPanel.jsx";
 
 export default function MainAdminPage() {
   const [settings, setSettings] = useState({});
@@ -84,6 +85,8 @@ export default function MainAdminPage() {
               </button>
             </div>
           </div>
+
+          <ImportExportPanel />
 
           <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
             <div className="flex items-start justify-between gap-4">
