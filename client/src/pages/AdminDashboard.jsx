@@ -176,6 +176,7 @@ export default function AdminDashboard() {
                   {u.role === "admin" && <ShieldCheck size={12} />}
                   {u.role}
                 </span>
+                <button onClick={() => setModal({type:"user",data:u})} className="text-gray-400 hover:text-brand-600"><Pencil size={15} /></button>
                 <button onClick={() => setDeleteTarget({type:"user",id:u.id,name:u.email})} className="text-gray-400 hover:text-red-600">
                   <Trash2 size={15} />
                 </button>
@@ -195,18 +196,18 @@ export default function AdminDashboard() {
         <GroupModal group={modal.data} users={users} contacts={contacts} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "donation" && (
-        <DonationModal contact={modal.data && modal.data.firstName ? modal.data : undefined} contacts={contacts} onClose={closeModal} onSaved={onSaved} />
+        <DonationModal contact={modal.data && modal.data.firstName ? modal.data : undefined} contacts={modal.groupContacts || contacts} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "editDonation" && (
         <DonationModal donation={modal.data} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "user" && (
-        <UserModal contacts={contacts} onClose={closeModal} onSaved={onSaved} />
+        <UserModal contacts={contacts} user={modal.data} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "contactDetail" && (
         <ContactDetailModal contactId={modal.data.id} onClose={closeModal} />
       )}
-      {modal?.type === "groupDetail" && (<div className="fixed inset-0 z-50 bg-black/40 p-4 overflow-auto"><div className="bg-white rounded-2xl max-w-4xl mx-auto my-8 shadow-xl"><div className="p-5 border-b flex justify-between"><div><h2 className="text-xl font-bold">{modal.data.name}</h2><p className="text-sm text-gray-500">Owner: {modal.data.manager?.name||modal.data.manager?.email||"Unassigned"} · Total raised: ${Number(modal.data.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p></div><button onClick={closeModal}>Close</button></div><div className="p-5 grid md:grid-cols-2 gap-6"><div><h3 className="font-semibold mb-3">Contacts ({modal.data.contacts.length})</h3><div className="space-y-2 max-h-80 overflow-auto">{modal.data.contacts.map(c=><button key={c.id} onClick={()=>setModal({type:"contactDetail",data:c})} className="block w-full text-left border rounded-xl p-3 hover:bg-gray-50">{c.firstName} {c.lastName}</button>)}</div></div><div><h3 className="font-semibold mb-3">Donations</h3><div className="space-y-2 max-h-80 overflow-auto">{modal.data.donations.map(d=><div key={d.id} className="border rounded-xl p-3 flex justify-between"><span>{d.contact.firstName} {d.contact.lastName}</span><b>${Number(d.amount).toFixed(2)}</b></div>)}{modal.data.donations.length===0&&<p className="text-gray-400">No donations yet.</p>}</div></div></div></div></div>)}
+      {modal?.type === "groupDetail" && (<div className="fixed inset-0 z-50 bg-black/40 p-4 overflow-auto"><div className="bg-white rounded-2xl max-w-4xl mx-auto my-8 shadow-xl"><div className="p-5 border-b flex justify-between"><div><h2 className="text-xl font-bold">{modal.data.name}</h2><p className="text-sm text-gray-500">Owner: {modal.data.manager?.name||modal.data.manager?.email||"Unassigned"} · Total raised: ${Number(modal.data.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p></div><button onClick={closeModal}>Close</button></div><div className="p-5 grid md:grid-cols-2 gap-6"><div><div className="flex items-center justify-between mb-3"><h3 className="font-semibold">Contacts ({modal.data.contacts.length})</h3><button onClick={()=>setModal({type:"donation",data:null,groupContacts:modal.data.contacts})} className="px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold">+ Add Donation</button></div><div className="space-y-2 max-h-80 overflow-auto">{modal.data.contacts.map(c=><button key={c.id} onClick={()=>setModal({type:"contactDetail",data:c})} className="block w-full text-left border rounded-xl p-3 hover:bg-gray-50">{c.firstName} {c.lastName}</button>)}</div></div><div><h3 className="font-semibold mb-3">Donations</h3><div className="space-y-2 max-h-80 overflow-auto">{modal.data.donations.map(d=><div key={d.id} className="border rounded-xl p-3 flex justify-between"><span>{d.contact.firstName} {d.contact.lastName}</span><b>${Number(d.amount).toFixed(2)}</b></div>)}{modal.data.donations.length===0&&<p className="text-gray-400">No donations yet.</p>}</div></div></div></div></div>)}
       {deleteTarget && <ConfirmDelete title={`Delete ${deleteTarget.type}?`} message={`Are you sure you want to permanently delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.type==="contact" ? deleteContact(deleteTarget.id) : deleteUser(deleteTarget.id)} />}
 
       {modal?.type === "bulkDonation" && (

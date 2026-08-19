@@ -23,7 +23,7 @@ router.post("/login", async (req, res) => {
   if (!valid) return res.status(401).json({ error: "Invalid email or password" });
 
   const token = jwt.sign(
-    { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId },
+    { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId, isMainAdmin:user.isMainAdmin },
     JWT_SECRET,
     { expiresIn: "7d" }
   );
@@ -34,7 +34,7 @@ router.post("/login", async (req, res) => {
 
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId },
+    user: { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId, isMainAdmin:user.isMainAdmin },
   });
 });
 
@@ -68,7 +68,11 @@ router.put("/change-password", authenticate, async (req, res) => {
 router.post("/request-password-link", async (req,res)=>{
   const email=(req.body.email||"").toLowerCase().trim();
   if (!email) return res.status(400).json({error:"Email is required"});
-  const user=await prisma.user.findUnique({where:{email}});
+  let user=await prisma.user.findUnique({where:{email}});
+  if (!user) {
+    const contact=await prisma.contact.findUnique({where:{email}});
+    if (contact) user=await prisma.user.create({data:{email,password:await bcrypt.hash(crypto.randomBytes(24).toString("hex"),10),role:"user",contactId:contact.id,name:`${contact.firstName} ${contact.lastName}`,passwordSet:false}});
+  }
   // Always return success so email existence is not exposed.
   if (user) {
     const token=crypto.randomBytes(32).toString("hex");

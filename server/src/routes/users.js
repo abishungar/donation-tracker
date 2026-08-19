@@ -10,7 +10,7 @@ router.use(authenticate, authorize("admin"));
 // List all users
 router.get("/", async (req, res) => {
   const users = await prisma.user.findMany({
-    select: { id: true, email: true, name: true, role: true, contactId: true, createdAt: true },
+    select: { id: true, email: true, name: true, role: true, contactId: true, isMainAdmin:true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });
   res.json(users);
@@ -18,7 +18,7 @@ router.get("/", async (req, res) => {
 
 // Create a user (admin, manager, or plain user)
 router.post("/", async (req, res) => {
-  const { email, password, role, contactId, name } = req.body;
+  const { email, password, role, contactId, name, isMainAdmin } = req.body;
   if (!email || !password || !role) {
     return res.status(400).json({ error: "email, password, and role are required" });
   }
@@ -35,6 +35,7 @@ router.post("/", async (req, res) => {
         role,
         name: name || null,
         contactId: contactId || null,
+        isMainAdmin: !!isMainAdmin,
       },
     });
     await writeLog(req, "CREATE_USER", { email: user.email, role: user.role });
@@ -47,12 +48,17 @@ router.post("/", async (req, res) => {
 // Update a user's role, contact link, name, or password
 router.put("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const { role, contactId, password, name } = req.body;
+  const { role, contactId, password, name, isMainAdmin } = req.body;
   const data = {};
   if (role) data.role = role;
   if (contactId !== undefined) data.contactId = contactId || null;
   if (name !== undefined) data.name = name || null;
   if (password) data.password = await bcrypt.hash(password, 10);
+  if (isMainAdmin !== undefined) {
+    const lock=await prisma.appSetting.findUnique({where:{key:"lock_main_admin"}});
+    if (lock?.value === "true" && !req.user.isMainAdmin) return res.status(403).json({error:"Main Admin access is locked by Main Admin settings"});
+    data.isMainAdmin=!!isMainAdmin;
+  }
 
   try {
     const user = await prisma.user.update({ where: { id }, data });

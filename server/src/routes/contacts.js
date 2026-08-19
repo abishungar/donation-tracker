@@ -1,5 +1,6 @@
 const express = require("express");
 const prisma = require("../db");
+const bcrypt = require("bcryptjs");
 const { authenticate, authorize } = require("../middleware/auth");
 const { writeLog } = require("../utils/log");
 
@@ -50,6 +51,9 @@ router.post("/", authorize("admin", "manager"), async (req, res) => {
       active: active !== undefined ? !!active : true,
     },
   });
+  if (contact.email) {
+    await prisma.user.upsert({ where:{email:contact.email.toLowerCase().trim()}, update:{contactId:contact.id, name:`${contact.firstName} ${contact.lastName}`}, create:{email:contact.email.toLowerCase().trim(), password:await bcrypt.hash(require("crypto").randomBytes(24).toString("hex"),10), role:"user", contactId:contact.id, name:`${contact.firstName} ${contact.lastName}`, passwordSet:false} });
+  }
   await writeLog(req, "CREATE_CONTACT", { id: contact.id, name: `${firstName} ${lastName}` });
   res.status(201).json(contact);
 });
@@ -80,6 +84,9 @@ router.put("/:id", authorize("admin", "manager"), async (req, res) => {
       ...(active !== undefined && { active: !!active }),
     },
   });
+  if (contact.email) {
+    await prisma.user.upsert({ where:{email:contact.email.toLowerCase().trim()}, update:{contactId:contact.id, name:`${contact.firstName} ${contact.lastName}`}, create:{email:contact.email.toLowerCase().trim(), password:await bcrypt.hash(require("crypto").randomBytes(24).toString("hex"),10), role:"user", contactId:contact.id, name:`${contact.firstName} ${contact.lastName}`, passwordSet:false} });
+  }
   await writeLog(req, "UPDATE_CONTACT", { id });
   res.json(contact);
 });
