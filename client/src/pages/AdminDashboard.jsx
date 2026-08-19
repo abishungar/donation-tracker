@@ -8,17 +8,14 @@ import ContactDetailModal from "../components/ContactDetailModal.jsx";
 import BulkDonationEntry from "../components/BulkDonationEntry.jsx";
 import Analytics from "../components/Analytics.jsx";
 import ConfirmDelete from "../components/ConfirmDelete.jsx";
-import EmailSettingsModal from "../components/EmailSettingsModal.jsx";
 import api from "../api";
-import { useAuth } from "../context/AuthContext.jsx";
 import {
-  UserPlus, Users2, HeartHandshake, Pencil, Trash2, ShieldCheck, Rows3, Mail,
+  UserPlus, Users2, HeartHandshake, Pencil, Trash2, ShieldCheck, Rows3,
 } from "lucide-react";
 
 const TABS = ["Overview", "Analytics", "Contacts", "Groups", "Donations", "Users"];
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
   const [tab, setTab] = useState("Overview");
   const [groups, setGroups] = useState([]);
   const [users, setUsers] = useState([]);
@@ -73,7 +70,6 @@ export default function AdminDashboard() {
           <QuickAction icon={Users2} label="Add Group" onClick={() => setModal({ type: "group" })} />
           <QuickAction icon={Rows3} label="Bulk Add Donations" onClick={() => setModal({ type: "bulkDonation" })} />
           <QuickAction icon={HeartHandshake} label="Add Donation" onClick={() => setModal({ type: "donation" })} primary />
-          {user?.isMainAdmin && <QuickAction icon={Mail} label="Email Settings" onClick={() => setModal({ type: "emailSettings" })} />}
         </div>
       </div>
 
@@ -219,7 +215,6 @@ export default function AdminDashboard() {
           onContact={(contact) => setModal({ type: "contactDetail", data: contact })}
         />
       )}
-      {modal?.type === "emailSettings" && <EmailSettingsModal onClose={closeModal} />}
       {deleteTarget && <ConfirmDelete title={`Delete ${deleteTarget.type}?`} message={`Are you sure you want to permanently delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.type==="contact" ? deleteContact(deleteTarget.id) : deleteUser(deleteTarget.id)} />}
 
       {modal?.type === "bulkDonation" && (
