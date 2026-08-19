@@ -5,6 +5,8 @@ const prisma = require("../db");
 const { JWT_SECRET } = require("../middleware/auth");
 const { authenticate } = require("../middleware/auth");
 const { writeLog } = require("../utils/log");
+const crypto = require("crypto");
+const { sendMail } = require("../utils/mailer");
 
 const router = express.Router();
 
@@ -60,6 +62,28 @@ router.put("/change-password", authenticate, async (req, res) => {
     data: { userId: user.id, userEmail: user.email, action: "CHANGE_PASSWORD" },
   });
   res.json({ success: true });
+});
+
+
+router.post("/request-password-link", async (req,res)=>{
+  const email=(req.body.email||"").toLowerCase().trim();
+  if (!email) return res.status(400).json({error:"Email is required"});
+  const user=await prisma.user.findUnique({where:{email}});
+  // Always return success so email existence is not exposed.
+  if (user) {
+    const token=crypto.randomBytes(32).toString("hex");
+    await prisma.passwordResetToken.deleteMany({where:{userId:user.id}});
+    await prisma.passwordResetToken.create({data:{token,userId:user.id,expiresAt:new Date(Date.now()+60*60*1000)}});
+    const base=process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+    const link=`${base}/set-password?token=${token}`;
+    try { await sendMail(user.email,"Set or reset your Donation Tracker password",`<p>Hello${user.name?` ${user.name}`:""},</p><p>Click the link below to set your password. It expires in 1 hour.</p><p><a href="${link}">${link}</a></p>`); } catch(e) { return res.status(503).json({error:"Email is not configured. Ask the Main Admin to configure Gmail SMTP."}); }
+  }
+  res.json({success:true,message:"If the email exists, a password link has been sent."});
+});
+router.post("/set-password", async (req,res)=>{
+ const {token,password}=req.body; if(!token||!password||password.length<6)return res.status(400).json({error:"A valid token and a password of at least 6 characters are required"});
+ const row=await prisma.passwordResetToken.findUnique({where:{token}}); if(!row||row.expiresAt<new Date())return res.status(400).json({error:"This password link is invalid or expired"});
+ const hash=await bcrypt.hash(password,10); await prisma.user.update({where:{id:row.userId},data:{password:hash,passwordSet:true}}); await prisma.passwordResetToken.delete({where:{id:row.id}}); res.json({success:true});
 });
 
 module.exports = router;

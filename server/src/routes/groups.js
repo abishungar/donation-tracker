@@ -24,7 +24,10 @@ router.get("/", authorize("admin", "manager"), async (req, res) => {
         where: { groupId: g.id },
         _sum: { amount: true },
       });
-      return { ...g, totalRaised: sum._sum.amount || 0 };
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthly = await prisma.donation.aggregate({ where: { groupId: g.id, date: { gte: start } }, _sum: { amount: true } });
+      return { ...g, totalRaised: sum._sum.amount || 0, monthRaised: monthly._sum.amount || 0 };
     })
   );
 
@@ -33,10 +36,10 @@ router.get("/", authorize("admin", "manager"), async (req, res) => {
 
 // Create group (admin only)
 router.post("/", authorize("admin"), async (req, res) => {
-  const { name, managerId } = req.body;
+  const { name, managerId, managerContactId } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
   const group = await prisma.group.create({
-    data: { name, managerId: managerId ? Number(managerId) : null },
+    data: { name, managerId: managerId ? Number(managerId) : null, managerContactId: managerContactId ? Number(managerContactId) : null },
   });
   await writeLog(req, "CREATE_GROUP", { id: group.id, name });
   res.status(201).json(group);
@@ -45,13 +48,14 @@ router.post("/", authorize("admin"), async (req, res) => {
 // Update group (admin only)
 router.put("/:id", authorize("admin"), async (req, res) => {
   const id = Number(req.params.id);
-  const { name, managerId } = req.body;
+  const { name, managerId, managerContactId } = req.body;
   try {
     const group = await prisma.group.update({
       where: { id },
       data: {
         ...(name !== undefined && { name }),
         ...(managerId !== undefined && { managerId: managerId ? Number(managerId) : null }),
+        ...(managerContactId !== undefined && { managerContactId: managerContactId ? Number(managerContactId) : null }),
       },
     });
     await writeLog(req, "UPDATE_GROUP", { id });

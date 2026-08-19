@@ -11,11 +11,12 @@ async function main() {
   if (!existingAdmin) {
     const hash = await bcrypt.hash(adminPassword, 10);
     await prisma.user.create({
-      data: { email: adminEmail, password: hash, role: "admin" },
+      data: { email: adminEmail, password: hash, role: "admin", isMainAdmin: true, passwordSet: true },
     });
     console.log(`Created admin user: ${adminEmail} / ${adminPassword}`);
   } else {
-    console.log("Admin user already exists, skipping.");
+    await prisma.user.update({ where: { id: existingAdmin.id }, data: { isMainAdmin: true } });
+    console.log("Admin user already exists; marked as Main Admin.");
   }
 
   const groupCount = await prisma.group.count();

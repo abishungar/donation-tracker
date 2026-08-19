@@ -10,6 +10,7 @@ const groupRoutes = require("./routes/groups");
 const donationRoutes = require("./routes/donations");
 const reportRoutes = require("./routes/reports");
 const logRoutes = require("./routes/logs");
+const adminRoutes = require("./routes/admin");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -24,6 +25,7 @@ app.use("/api/groups", groupRoutes);
 app.use("/api/donations", donationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/logs", logRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 

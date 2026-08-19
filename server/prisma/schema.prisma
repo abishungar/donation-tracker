@@ -20,7 +20,11 @@ model User {
   contactId     Int?     @unique
   contact       Contact? @relation(fields: [contactId], references: [id])
   managedGroups Group[]  @relation("GroupManager")
+  resetTokens   PasswordResetToken[]
   createdAt     DateTime @default(now())
+  isMainAdmin   Boolean  @default(false)
+  pinHash       String?
+  passwordSet   Boolean  @default(false)
 }
 
 model Contact {
@@ -41,6 +45,7 @@ model Group {
   id        Int        @id @default(autoincrement())
   name      String
   managerId Int?
+  managerContactId Int?
   manager   User?      @relation("GroupManager", fields: [managerId], references: [id])
   contacts  Contact[]
   donations Donation[]
@@ -58,6 +63,21 @@ model Donation {
   type        String // e.g. "Cash", "Check", "Online", "In-Kind"
   createdById Int?
   createdAt   DateTime @default(now())
+}
+
+model AppSetting {
+  key       String @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Log {

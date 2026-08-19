@@ -1,0 +1,4 @@
+const nodemailer=require("nodemailer"); const prisma=require("../../db");
+async function settings(){const rows=await prisma.appSetting.findMany({where:{key:{in:["smtp_user","smtp_app_password","smtp_from"]}}}); return Object.fromEntries(rows.map(x=>[x.key,x.value]));}
+async function sendMail(to,subject,html){const s=await settings(); if(!s.smtp_user||!s.smtp_app_password) throw new Error("SMTP is not configured"); const t=nodemailer.createTransport({service:"gmail",auth:{user:s.smtp_user,pass:s.smtp_app_password}}); return t.sendMail({from:s.smtp_from||s.smtp_user,to,subject,html});}
+module.exports={sendMail,settings};

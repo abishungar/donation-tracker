@@ -7,6 +7,7 @@ import UserModal from "../components/UserModal.jsx";
 import ContactDetailModal from "../components/ContactDetailModal.jsx";
 import BulkDonationEntry from "../components/BulkDonationEntry.jsx";
 import Analytics from "../components/Analytics.jsx";
+import ConfirmDelete from "../components/ConfirmDelete.jsx";
 import api from "../api";
 import {
   UserPlus, Users2, HeartHandshake, Pencil, Trash2, ShieldCheck, Rows3,
@@ -22,7 +23,8 @@ export default function AdminDashboard() {
   const [donations, setDonations] = useState([]);
   const [error, setError] = useState("");
 
-  const [modal, setModal] = useState(null); // { type: 'contact'|'group'|'donation'|'user', data? }
+  const [modal, setModal] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'contact'|'group'|'donation'|'user', data? }
 
   function loadAll() {
     api.get("/groups").then((r) => setGroups(r.data)).catch(() => {});
@@ -40,25 +42,9 @@ export default function AdminDashboard() {
     loadAll();
   }
 
-  async function deleteContact(id) {
-    if (!confirm("Delete this contact? This cannot be undone.")) return;
-    try {
-      await api.delete(`/contacts/${id}`);
-      loadAll();
-    } catch (err) {
-      setError(err.response?.data?.error || "Could not delete contact");
-    }
-  }
+  async function deleteContact(id) { try { await api.delete(`/contacts/${id}`); setDeleteTarget(null); loadAll(); } catch (err) { setError(err.response?.data?.error || "Could not delete contact"); } }
 
-  async function deleteUser(id) {
-    if (!confirm("Delete this user account?")) return;
-    try {
-      await api.delete(`/users/${id}`);
-      loadAll();
-    } catch (err) {
-      setError(err.response?.data?.error || "Could not delete user");
-    }
-  }
+  async function deleteUser(id) { try { await api.delete(`/users/${id}`); setDeleteTarget(null); loadAll(); } catch (err) { setError(err.response?.data?.error || "Could not delete user"); } }
 
   const contactsByGroup = useMemo(() => {
     const groupsMap = new Map();
@@ -152,7 +138,7 @@ export default function AdminDashboard() {
                       <button onClick={() => setModal({ type: "contact", data: c })} className="text-gray-400 hover:text-brand-600">
                         <Pencil size={15} />
                       </button>
-                      <button onClick={() => deleteContact(c.id)} className="text-gray-400 hover:text-red-600">
+                      <button onClick={() => setDeleteTarget({type:"contact",id:c.id,name:`${c.firstName} ${c.lastName}`})} className="text-gray-400 hover:text-red-600">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -173,7 +159,7 @@ export default function AdminDashboard() {
               <div>
                 <p className="text-sm font-medium text-gray-800">{g.name}</p>
                 <p className="text-xs text-gray-400">
-                  Manager: {g.manager?.name || g.manager?.email || "Unassigned"} · ${g.totalRaised.toLocaleString()} raised
+                  Manager: {g.manager?.name || g.manager?.email || "Unassigned"} · ${g.totalRaised.toLocaleString()} raised · ${(g.monthRaised || 0).toLocaleString()} this month
                 </p>
               </div>
               <button onClick={() => setModal({ type: "group", data: g })} className="text-gray-400 hover:text-brand-600">
@@ -230,7 +216,7 @@ export default function AdminDashboard() {
                   {u.role === "admin" && <ShieldCheck size={12} />}
                   {u.role}
                 </span>
-                <button onClick={() => deleteUser(u.id)} className="text-gray-400 hover:text-red-600">
+                <button onClick={() => setDeleteTarget({type:"user",id:u.id,name:u.email})} className="text-gray-400 hover:text-red-600">
                   <Trash2 size={15} />
                 </button>
               </div>
@@ -260,6 +246,8 @@ export default function AdminDashboard() {
       {modal?.type === "contactDetail" && (
         <ContactDetailModal contactId={modal.data.id} onClose={closeModal} />
       )}
+      {deleteTarget && <ConfirmDelete title={`Delete ${deleteTarget.type}?`} message={`Are you sure you want to permanently delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.type==="contact" ? deleteContact(deleteTarget.id) : deleteUser(deleteTarget.id)} />}
+
       {modal?.type === "bulkDonation" && (
         <BulkDonationEntry contacts={contacts} onClose={closeModal} onAnySaved={loadAll} />
       )}

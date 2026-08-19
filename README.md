@@ -154,3 +154,13 @@ donation-tracker/
 | `/api/donations` | admin (all), manager (own group), user (own, read-only) |
 | `/api/users` | admin only |
 | `/api/logs` | admin only |
+
+
+## New administration features
+- Main Admin flag for the existing/default admin. Main Admin can configure Gmail SMTP, reset passwords/PINs, and import/export data.
+- Gmail SMTP uses an address plus Google App Password stored in the database through Main Admin settings.
+- Password links expire after one hour. Users can request a set/reset password link using only their email.
+- Managers may be assigned from Contacts to a group without creating a login.
+- Group totals include all-time and current-month totals; PDF reports are available from `/api/reports/groups/:id/pdf` with optional `?month=YYYY-MM`.
+- Bulk donation entry is scrollable, searchable, sortable, filterable by group, and remembers the default payment type in the browser.
+- Data import accepts rows plus a mapping object, allowing source columns to be mapped to this system.
