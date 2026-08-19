@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const prisma = require("./db");
 
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
@@ -44,6 +45,20 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    const result = await prisma.user.updateMany({
+      where: { role: "admin", isMainAdmin: false },
+      data: { isMainAdmin: true },
+    });
+    if (result.count) console.log(`Promoted ${result.count} existing admin(s) to Main Admin.`);
+  } catch (err) {
+    console.error("Main Admin promotion check failed:", err.message);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+}
+
+startServer();

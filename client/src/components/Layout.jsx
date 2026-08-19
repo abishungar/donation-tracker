@@ -19,7 +19,7 @@ export default function Layout({ children }) {
     links.push(
       { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
       { to: "/admin/logs", label: "Activity Logs", icon: ScrollText },
-      ...(user?.isMainAdmin ? [{ to: "/main-admin", label: "Main Admin Settings", icon: SettingsIcon }] : [])
+      ...(user?.role === "admin" ? [{ to: "/main-admin", label: "Main Admin Settings", icon: SettingsIcon }] : [])
     );
   }
   if (user?.role === "manager") {
