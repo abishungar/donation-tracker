@@ -8,9 +8,11 @@ import ContactDetailModal from "../components/ContactDetailModal.jsx";
 import BulkDonationEntry from "../components/BulkDonationEntry.jsx";
 import Analytics from "../components/Analytics.jsx";
 import ConfirmDelete from "../components/ConfirmDelete.jsx";
+import EmailSettingsModal from "../components/EmailSettingsModal.jsx";
 import api from "../api";
+import { useAuth } from "../context/AuthContext.jsx";
 import {
-  UserPlus, Users2, HeartHandshake, Pencil, Trash2, ShieldCheck, Rows3,
+  UserPlus, Users2, HeartHandshake, Pencil, Trash2, ShieldCheck, Rows3, Mail,
 } from "lucide-react";
 
 const TABS = ["Overview", "Analytics", "Contacts", "Groups", "Donations", "Users"];
@@ -69,7 +71,7 @@ export default function AdminDashboard() {
           <QuickAction icon={UserPlus} label="Add Contact" onClick={() => setModal({ type: "contact" })} />
           <QuickAction icon={Users2} label="Add Group" onClick={() => setModal({ type: "group" })} />
           <QuickAction icon={Rows3} label="Bulk Add Donations" onClick={() => setModal({ type: "bulkDonation" })} />
-          <QuickAction icon={HeartHandshake} label="Add Donation" onClick={() => setModal({ type: "donation" })} primary />
+          <QuickAction icon={HeartHandshake} label="Add Donation" onClick={() => setModal({ type: "donation" })} primary />\n          {user?.isMainAdmin && <QuickAction icon={Mail} label="Email Settings" onClick={() => setModal({ type: "emailSettings" })} />}
         </div>
       </div>
 
@@ -113,15 +115,10 @@ export default function AdminDashboard() {
             <input value={contactSearch} onChange={e=>setContactSearch(e.target.value)} placeholder="Search by name, email, or phone..." className="border border-gray-200 bg-gray-50 hover:bg-white rounded-xl px-4 py-3 w-full sm:max-w-md focus:ring-2 focus:ring-brand-200 outline-none" />
             <select value={contactSort} onChange={e=>setContactSort(e.target.value)} className="border border-gray-200 bg-gray-50 hover:bg-white rounded-xl px-4 py-2.5 font-medium text-gray-700 outline-none focus:ring-2 focus:ring-brand-200"><option value="first">First name</option><option value="last">Last name</option><option value="group">Group</option><option value="money">Most money given</option></select>
           </div>
-          <div className="divide-y">{(() => {
-            const filtered=[...contacts].filter(c=>`${c.firstName} ${c.lastName} ${c.email||""}`.toLowerCase().includes(contactSearch.toLowerCase()));
-            const sorted=filtered.sort((a,b)=>contactSort==="money"?(b.totalDonated||0)-(a.totalDonated||0):contactSort==="group"?`${a.group?.name||"~~~~"} ${a.lastName||""} ${a.firstName||""}`.localeCompare(`${b.group?.name||"~~~~"} ${b.lastName||""} ${b.firstName||""}`):contactSort==="last"?`${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`):`${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
-            let lastGroup=null;
-            return sorted.map(c=> <React.Fragment key={c.id}>{contactSort==="group" && (c.group?.name||"No Group")!==lastGroup && (()=>{lastGroup=c.group?.name||"No Group"; return <div className="px-5 py-2.5 bg-brand-50 border-y border-brand-100 text-sm font-bold text-brand-800">📁 {lastGroup}</div>})()}<div onClick={()=>setModal({type:"contactDetail",data:c})} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-brand-50/60 cursor-pointer transition">
-              <div><p className="font-semibold text-gray-800">{c.firstName} {c.lastName}</p><p className="text-xs text-gray-400">{c.email||c.phone||"No contact info"}{contactSort!=="group" && ` · ${c.group?.name||"No group"}`}</p></div>
-              <button onClick={e=>{e.stopPropagation();setModal({type:"donation",data:c})}} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl font-semibold whitespace-nowrap">+ Add Donation</button>
-            </div></React.Fragment>)
-          })()}</div>
+          <div className="divide-y">{[...contacts].filter(c=>`${c.firstName} ${c.lastName} ${c.email||""}`.toLowerCase().includes(contactSearch.toLowerCase())).sort((a,b)=>contactSort==="money"?(b.totalDonated||0)-(a.totalDonated||0):contactSort==="group"?`${a.group?.name||"~~~~"} ${a.lastName||""} ${a.firstName||""}`.localeCompare(`${b.group?.name||"~~~~"} ${b.lastName||""} ${b.firstName||""}`):contactSort==="last"?`${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`):`${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)).map(c=><div key={c.id} onClick={()=>setModal({type:"contactDetail",data:c})} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-brand-50/60 cursor-pointer transition">
+            <div><p className="font-semibold text-gray-800">{c.firstName} {c.lastName}</p><p className="text-xs text-gray-400">{c.group?.name||"No group"} · {c.email||c.phone||"No contact info"}</p></div>
+            <button onClick={e=>{e.stopPropagation();setModal({type:"donation",data:c})}} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl font-semibold whitespace-nowrap">+ Add Donation</button>
+          </div>)}</div>
         </div>
       )}
 
@@ -207,18 +204,212 @@ export default function AdminDashboard() {
         <DonationModal donation={modal.data} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "user" && (
-        <UserModal contacts={contacts} user={modal.data} onClose={closeModal} onSaved={onSaved} />
+        <UserModal contacts={contacts} groups={groups} user={modal.data} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "contactDetail" && (
-        <ContactDetailModal contactId={modal.data.id} onClose={closeModal} onAddDonation={(contact)=>setModal({type:"donation",data:contact})} />
+        <ContactDetailModal contactId={modal.data.id} onClose={closeModal} />
       )}
-      {modal?.type === "groupDetail" && (<div className="fixed inset-0 z-50 bg-black/40 p-4 overflow-auto"><div className="bg-white rounded-2xl max-w-4xl mx-auto my-8 shadow-xl"><div className="p-5 border-b flex justify-between"><div><h2 className="text-xl font-bold">{modal.data.name}</h2><p className="text-sm text-gray-500">Owner: {modal.data.manager?.name||modal.data.manager?.email||"Unassigned"} · Total raised: ${Number(modal.data.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p></div><button onClick={closeModal}>Close</button></div><div className="p-5 grid md:grid-cols-2 gap-6"><div><div className="flex items-center justify-between mb-3"><h3 className="font-semibold">Contacts ({modal.data.contacts.length})</h3><button onClick={()=>setModal({type:"donation",data:null,groupContacts:modal.data.contacts})} className="px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold">+ Add Donation</button></div><div className="space-y-2 max-h-80 overflow-auto">{modal.data.contacts.map(c=><button key={c.id} onClick={()=>setModal({type:"contactDetail",data:c})} className="block w-full text-left border rounded-xl p-3 hover:bg-gray-50">{c.firstName} {c.lastName}</button>)}</div></div><div><h3 className="font-semibold mb-3">Donations</h3><div className="space-y-2 max-h-80 overflow-auto">{modal.data.donations.map(d=><div key={d.id} className="border rounded-xl p-3 flex justify-between"><span>{d.contact.firstName} {d.contact.lastName}</span><b>${Number(d.amount).toFixed(2)}</b></div>)}{modal.data.donations.length===0&&<p className="text-gray-400">No donations yet.</p>}</div></div></div></div></div>)}
+      {modal?.type === "groupDetail" && (
+        <GroupDetailModal
+          group={modal.data}
+          onClose={closeModal}
+          onAddDonation={(contact) => setModal({ type: "donation", data: contact, groupContacts: modal.data.contacts })}
+          onContact={(contact) => setModal({ type: "contactDetail", data: contact })}
+        />
+      )}
+      {modal?.type === "emailSettings" && <EmailSettingsModal onClose={closeModal} />}
       {deleteTarget && <ConfirmDelete title={`Delete ${deleteTarget.type}?`} message={`Are you sure you want to permanently delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.type==="contact" ? deleteContact(deleteTarget.id) : deleteUser(deleteTarget.id)} />}
 
       {modal?.type === "bulkDonation" && (
         <BulkDonationEntry contacts={contacts} onClose={closeModal} onAnySaved={loadAll} />
       )}
     </Layout>
+  );
+}
+
+function GroupDetailModal({ group, onClose, onAddDonation, onContact }) {
+  const [view, setView] = useState("summary");
+
+  const donations = group?.donations || [];
+  const contacts = group?.contacts || [];
+  const total = donations.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+
+  const months = useMemo(() => {
+    const map = new Map();
+    for (const d of donations) {
+      const dt = new Date(d.date);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      if (!map.has(key)) {
+        map.set(key, { key, label: dt.toLocaleString(undefined, { month: "long", year: "numeric" }), total: 0, count: 0 });
+      }
+      const row = map.get(key);
+      row.total += Number(d.amount || 0);
+      row.count += 1;
+    }
+    return Array.from(map.values()).sort((a, b) => b.key.localeCompare(a.key));
+  }, [donations]);
+
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const monthDonations = selectedMonth
+    ? donations.filter((d) => {
+        const dt = new Date(d.date);
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}` === selectedMonth;
+      })
+    : donations;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 p-4 overflow-auto">
+      <div className="bg-white rounded-2xl max-w-5xl mx-auto my-8 shadow-xl overflow-hidden">
+        <div className="p-5 border-b flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">{group.name}</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Manager: {group.manager?.name || group.manager?.email || "Unassigned"}
+            </p>
+          </div>
+          <button onClick={onClose} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-800">Close</button>
+        </div>
+
+        <div className="p-5">
+          <div className="grid sm:grid-cols-3 gap-3 mb-5">
+            <button
+              onClick={() => { setView("summary"); setSelectedMonth(null); }}
+              className={`text-left rounded-xl border p-4 ${view === "summary" && !selectedMonth ? "border-brand-400 bg-brand-50" : "hover:border-brand-300"}`}
+            >
+              <p className="text-xs uppercase tracking-wide text-gray-400">Total Raised So Far</p>
+              <p className="text-2xl font-bold text-brand-700 mt-1">${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="text-xs text-gray-400 mt-1">{donations.length} donations</p>
+            </button>
+
+            <button
+              onClick={() => { setView("months"); setSelectedMonth(null); }}
+              className={`text-left rounded-xl border p-4 ${view === "months" ? "border-brand-400 bg-brand-50" : "hover:border-brand-300"}`}
+            >
+              <p className="text-xs uppercase tracking-wide text-gray-400">By Month</p>
+              <p className="text-lg font-semibold text-gray-800 mt-1">{months.length} month{months.length === 1 ? "" : "s"}</p>
+              <p className="text-xs text-brand-600 mt-1">Click to view monthly totals →</p>
+            </button>
+
+            <button
+              onClick={() => { setView("users"); setSelectedMonth(null); }}
+              className={`text-left rounded-xl border p-4 ${view === "users" ? "border-brand-400 bg-brand-50" : "hover:border-brand-300"}`}
+            >
+              <p className="text-xs uppercase tracking-wide text-gray-400">Users / Contacts</p>
+              <p className="text-lg font-semibold text-gray-800 mt-1">{contacts.length}</p>
+              <p className="text-xs text-brand-600 mt-1">Click to see everyone →</p>
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-5">
+            <button
+              onClick={() => onAddDonation(null)}
+              className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold"
+            >
+              + Add Donation
+            </button>
+            {selectedMonth && (
+              <button onClick={() => setSelectedMonth(null)} className="px-4 py-2 rounded-lg border text-sm">
+                Show All Months
+              </button>
+            )}
+          </div>
+
+          {view === "summary" && !selectedMonth && (
+            <div className="grid md:grid-cols-2 gap-5">
+              <section className="border rounded-xl p-4">
+                <h3 className="font-semibold text-gray-800 mb-3">Recent Donations</h3>
+                <div className="space-y-2 max-h-80 overflow-auto">
+                  {donations.slice(0, 12).map((d) => (
+                    <div key={d.id} className="flex items-center justify-between gap-3 border-b last:border-0 pb-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{d.contact?.firstName} {d.contact?.lastName}</p>
+                        <p className="text-xs text-gray-400">{new Date(d.date).toLocaleDateString()} · {d.type}</p>
+                      </div>
+                      <b className="text-sm text-brand-700">${Number(d.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                    </div>
+                  ))}
+                  {!donations.length && <p className="text-sm text-gray-400">No donations yet.</p>}
+                </div>
+              </section>
+              <section className="border rounded-xl p-4">
+                <h3 className="font-semibold text-gray-800 mb-3">Quick Actions</h3>
+                <p className="text-sm text-gray-500 mb-4">Use the buttons above to review monthly totals, see all users, or add a donation.</p>
+                <button onClick={() => setView("users")} className="w-full text-left border rounded-lg px-3 py-3 hover:bg-gray-50">
+                  <b className="text-sm">View all users / contacts</b>
+                  <p className="text-xs text-gray-400 mt-1">See each person in this group and add a donation for them.</p>
+                </button>
+              </section>
+            </div>
+          )}
+
+          {view === "months" && !selectedMonth && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Monthly Totals</h3>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {months.map((m) => (
+                  <button key={m.key} onClick={() => { setSelectedMonth(m.key); setView("summary"); }}
+                    className="text-left border rounded-xl p-4 hover:border-brand-300 hover:bg-brand-50/40">
+                    <p className="text-sm font-medium text-gray-700">{m.label}</p>
+                    <p className="text-xl font-bold text-brand-700 mt-1">${m.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-gray-400 mt-1">{m.count} donation{m.count === 1 ? "" : "s"} · Click to see details</p>
+                  </button>
+                ))}
+                {!months.length && <p className="text-sm text-gray-400">No donations have been recorded.</p>}
+              </div>
+            </div>
+          )}
+
+          {view === "users" && !selectedMonth && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">All Users / Contacts</h3>
+              <div className="divide-y border rounded-xl overflow-hidden">
+                {contacts.map((c) => {
+                  const raised = donations.filter((d) => d.contactId === c.id).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+                  return (
+                    <div key={c.id} className="p-4 flex items-center justify-between gap-3 hover:bg-gray-50">
+                      <button onClick={() => onContact(c)} className="text-left min-w-0">
+                        <p className="font-medium text-gray-800">{c.firstName} {c.lastName}</p>
+                        <p className="text-xs text-gray-400">{c.email || c.phone || "No contact info"}</p>
+                      </button>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-brand-700">${raised.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <button onClick={() => onAddDonation(c)} className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold">+ Donation</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!contacts.length && <p className="p-4 text-sm text-gray-400">No contacts in this group.</p>}
+              </div>
+            </div>
+          )}
+
+          {selectedMonth && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">
+                {months.find((m) => m.key === selectedMonth)?.label || selectedMonth}
+              </h3>
+              <div className="bg-brand-50 rounded-xl p-4 mb-4">
+                <p className="text-xs text-gray-500">Raised this month</p>
+                <p className="text-2xl font-bold text-brand-700">
+                  ${monthDonations.reduce((sum, d) => sum + Number(d.amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="divide-y border rounded-xl overflow-hidden">
+                {monthDonations.map((d) => (
+                  <div key={d.id} className="p-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-gray-800">{d.contact?.firstName} {d.contact?.lastName}</p>
+                      <p className="text-xs text-gray-400">{new Date(d.date).toLocaleString()} · {d.type}</p>
+                    </div>
+                    <b className="text-brand-700">${Number(d.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

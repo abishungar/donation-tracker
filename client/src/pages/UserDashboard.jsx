@@ -1,15 +1,52 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Layout from "../components/Layout.jsx";
 import api from "../api";
 
 export default function UserDashboard() {
-  const [data, setData] = useState(null), [config,setConfig]=useState(null), [amount,setAmount]=useState(""), [error,setError]=useState(""), [success,setSuccess]=useState(""), [paying,setPaying]=useState(false);
-  const formRef=useRef(null);
-  useEffect(()=>{api.get("/reports/my-total").then(r=>setData(r.data)).catch(()=>setError("Could not load your giving history."));api.get("/payments/config").then(r=>setConfig(r.data)).catch(()=>{});},[]);
-  useEffect(()=>{if(!config?.ifieldsKey)return; const v=config.ifieldsVersion||"2.9.2109.2701"; if(document.querySelector(`script[data-sola-ifields="${v}"]`))return; const sc=document.createElement("script");sc.src=`https://cdn.cardknox.com/ifields/${v}/ifields.min.js`;sc.dataset.solaIfields=v;sc.onload=()=>{try{window.setAccount(config.ifieldsKey,"Donation Tracker","1.0.0");}catch(e){console.error(e)}};document.head.appendChild(sc);},[config]);
-  async function pay(e){e.preventDefault();setError("");setSuccess("");const n=Number(amount);if(!n||n<=0){setError("Enter a donation amount.");return}if(!window.getTokens){setError("Secure payment fields are still loading. Please try again.");return}setPaying(true);try{window.getTokens(async()=>{try{const card=document.querySelector('[data-ifields-id="card-number-token"]')?.value;const cvv=document.querySelector('[data-ifields-id="cvv-token"]')?.value;const r=await api.post("/payments/sale",{amount:n,xCardNum:card,xCVV:cvv});setSuccess(`Thank you! Your donation of $${n.toFixed(2)} was approved.`);setAmount("");api.get("/reports/my-total").then(x=>setData(x.data));}catch(err){setError(err.response?.data?.error||"Payment failed.")}finally{setPaying(false)}},()=>setPaying(false),30000);}catch(err){setError("Could not start secure payment.");setPaying(false)}}
-  return <Layout><div className="max-w-4xl"><h1 className="text-2xl font-semibold text-gray-800 mb-2">My Giving</h1><p className="text-gray-500 mb-6">View your giving history or make a secure online donation.</p>{error&&<div className="mb-4 bg-red-50 text-red-700 rounded-xl p-3 text-sm">{error}</div>}{success&&<div className="mb-4 bg-green-50 text-green-700 rounded-xl p-3 text-sm">{success}</div>}
-  <div className="grid lg:grid-cols-2 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"><p className="text-sm text-gray-500">Total Given</p><p className="text-4xl font-bold text-brand-700 mt-1">${(data?.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p><p className="text-xs text-gray-400 mt-2">Recorded donations</p></div>
-  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"><h2 className="text-lg font-semibold">Make a Donation</h2><p className="text-sm text-gray-500 mb-4">Your card details are entered into secure Sola iFields and are not sent to this app server.</p><form ref={formRef} onSubmit={pay}><label className="block text-sm font-medium text-gray-700 mb-1">Amount</label><div className="relative mb-4"><span className="absolute left-3 top-2.5 text-gray-500">$</span><input required inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} className="w-full border rounded-xl pl-8 pr-3 py-2.5 text-lg" placeholder="15.00"/></div><label className="block text-sm font-medium text-gray-700 mb-1">Card number</label>{config?.ifieldsKey ? <iframe data-ifields-id="card-number" data-ifields-placeholder="Card Number" src={`https://cdn.cardknox.com/ifields/${config.ifieldsVersion||"2.9.2109.2701"}/ifield.htm`} className="w-full h-11 border rounded-xl mb-3" title="Card number"></iframe> : <div className="h-11 border rounded-xl mb-3 flex items-center px-3 text-sm text-gray-400">Secure card field is loading…</div>}<input data-ifields-id="card-number-token" type="hidden" name="xCardNum"/><label className="block text-sm font-medium text-gray-700 mb-1">CVV</label>{config?.ifieldsKey ? <iframe data-ifields-id="cvv" data-ifields-placeholder="CVV" src={`https://cdn.cardknox.com/ifields/${config.ifieldsVersion||"2.9.2109.2701"}/ifield.htm`} className="w-full h-11 border rounded-xl mb-3" title="CVV"></iframe> : <div className="h-11 border rounded-xl mb-3 flex items-center px-3 text-sm text-gray-400">Secure card field is loading…</div>}<input data-ifields-id="cvv-token" type="hidden" name="xCVV"/><button disabled={paying} className="w-full rounded-xl bg-brand-600 text-white py-3 font-bold disabled:opacity-50">{paying?"Processing...":"Donate Securely"}</button></form></div></div>
-  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6"><div className="px-5 py-3 bg-gray-50 border-b"><h3 className="font-medium text-gray-700 text-sm">Donation History</h3></div><div className="divide-y">{data?.donations?.map(d=><div key={d.id} className="px-5 py-3 flex items-center justify-between"><div><p className="text-sm text-gray-700">{new Date(d.date).toLocaleDateString()}</p><p className="text-xs text-gray-400">{d.type}{d.paymentStatus?` • ${d.paymentStatus}`:""}{d.transactionRef?` • Ref ${d.transactionRef}`:""}</p></div><span className="text-sm font-semibold text-brand-700">${d.amount.toLocaleString(undefined,{minimumFractionDigits:2})}</span></div>)}{data&&!data.donations.length&&<p className="px-5 py-4 text-sm text-gray-400 text-center">No donations recorded yet.</p>}</div></div></div></Layout>;
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api
+      .get("/reports/my-total")
+      .then((res) => setData(res.data))
+      .catch(() => setError("Could not load your giving history."));
+  }, []);
+
+  return (
+    <Layout>
+      <h1 className="text-2xl font-semibold text-gray-800 mb-6">My Giving</h1>
+      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {!data && !error && <p className="text-gray-400">Loading...</p>}
+      {data && (
+        <>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 max-w-xs">
+            <p className="text-sm text-gray-500">Total Raised</p>
+            <p className="text-3xl font-bold text-brand-700">
+              ${data.totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-3 bg-gray-50 border-b">
+              <h3 className="font-medium text-gray-700 text-sm">Donation History</h3>
+            </div>
+            <div className="divide-y">
+              {data.donations.map((d) => (
+                <div key={d.id} className="px-5 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">{new Date(d.date).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-400">{d.type}</p>
+                  </div>
+                  <span className="text-sm font-semibold text-brand-700">${d.amount.toLocaleString()}</span>
+                </div>
+              ))}
+              {data.donations.length === 0 && (
+                <p className="px-5 py-4 text-sm text-gray-400 text-center">No donations recorded yet.</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </Layout>
+  );
 }

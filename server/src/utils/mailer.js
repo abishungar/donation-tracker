@@ -1,10 +1,57 @@
-const nodemailer=require("nodemailer");
-const prisma=require("../db");
-async function settings(){const rows=await prisma.appSetting.findMany({where:{key:{in:["smtp_google_account","smtp_app_password","smtp_from_email","smtp_display_name"]}}});return Object.fromEntries(rows.map(x=>[x.key,x.value]));}
-function wrap(title,body){return `<!doctype html><html><body style="margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#172033"><div style="max-width:600px;margin:30px auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 8px 30px rgba(20,35,60,.08)"><div style="padding:24px;background:#173b6d;color:#fff"><div style="font-size:20px;font-weight:700">Donation Tracker</div><div style="opacity:.85;font-size:13px;margin-top:5px">${title}</div></div><div style="padding:30px">${body}</div><div style="padding:18px 30px;background:#f8fafc;color:#7b8494;font-size:12px">This is an automated message. Please do not reply directly to this email.</div></div></body></html>`}
-async function transporter(){const s=await settings();if(!s.smtp_google_account||!s.smtp_app_password)throw new Error("SMTP is not configured. Add the Google Account and App Password in Main Admin Settings.");return {s,t:nodemailer.createTransport({host:"smtp.gmail.com",port:465,secure:true,auth:{user:s.smtp_google_account,pass:s.smtp_app_password}})};}
-async function sendMail(to,subject,html){const {s,t}=await transporter();return t.sendMail({from:`${s.smtp_display_name||"Donation Tracker"} <${s.smtp_from_email||s.smtp_google_account}>`,to,subject,html});}
-async function sendTestMail(to){if(!to)throw new Error("Enter a test email address");await sendMail(to,"Donation Tracker — SMTP Test",wrap("Email settings are working",`<h2 style="margin-top:0">SMTP is working 🎉</h2><p>Your Donation Tracker Gmail settings successfully sent this test email.</p><p style="color:#667085">Sender: ${((await settings()).smtp_from_email||"")}</p>`));}
-function passwordMail(name,link,reset=false){return wrap(reset?"Reset your password":"Set your password",`<h2 style="margin-top:0">${reset?"Reset your password":"Welcome"}${name?`, ${name}`:""}!</h2><p>${reset?"We received a request to reset your Donation Tracker password.":"Your Donation Tracker account is ready. Set your password to sign in."}</p><p style="margin:28px 0"><a href="${link}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">${reset?"Reset Password":"Set Password"}</a></p><p style="font-size:13px;color:#667085">This secure link expires in 1 hour. If you did not request this, you can safely ignore this email.</p>`)}
-function donationReceipt(name,amount,ref){return wrap("Donation receipt",`<h2 style="margin-top:0">Thank you${name?`, ${name}`:""}!</h2><p>Your donation was successfully processed.</p><div style="margin:24px 0;padding:20px;background:#f5f8ff;border-radius:14px"><div style="font-size:13px;color:#667085">Donation amount</div><div style="font-size:32px;font-weight:800;color:#173b6d">$${Number(amount).toFixed(2)}</div>${ref?`<div style="font-size:12px;color:#667085;margin-top:8px">Transaction: ${ref}</div>`:""}</div>`)}
-module.exports={sendMail,sendTestMail,passwordMail,donationReceipt,settings};
+const nodemailer = require("nodemailer");
+const prisma = require("../db");
+
+async function settings() {
+  const rows = await prisma.appSetting.findMany({
+    where: { key: { in: ["smtp_user", "smtp_app_password", "smtp_from"] } },
+  });
+  return Object.fromEntries(rows.map((x) => [x.key, x.value]));
+}
+
+function cleanPassword(value) {
+  // Google App Passwords are often copied with spaces; Gmail accepts the
+  // 16-character value without spaces.
+  return String(value || "").replace(/\s+/g, "");
+}
+
+async function createTransport() {
+  const s = await settings();
+  const user = String(s.smtp_user || "").trim();
+  const pass = cleanPassword(s.smtp_app_password);
+
+  if (!user || !pass) {
+    throw new Error("SMTP is not configured. Enter the Gmail address and Google App Password first.");
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
+
+  // Verify credentials before attempting a real message. This makes the
+  // admin Test Email button report the actual Gmail error.
+  await transporter.verify();
+  return { transporter, settings: { ...s, smtp_user: user, smtp_app_password: pass } };
+}
+
+async function verifySmtp() {
+  const { settings: s } = await createTransport();
+  return {
+    ok: true,
+    user: s.smtp_user,
+    from: s.smtp_from || s.smtp_user,
+  };
+}
+
+async function sendMail(to, subject, html) {
+  if (!to) throw new Error("Recipient email is required.");
+  const { transporter, settings: s } = await createTransport();
+  return transporter.sendMail({
+    from: s.smtp_from || s.smtp_user,
+    to: String(to).trim(),
+    subject,
+    html,
+  });
+}
+
+module.exports = { sendMail, settings, verifySmtp };

@@ -7,18 +7,44 @@ const { writeLog } = require("../utils/log");
 const router = express.Router();
 router.use(authenticate, authorize("admin"));
 
-// List all users
+async function assignManagerToGroup(userId, groupId, contactId) {
+  if (groupId === undefined) return;
+
+  // A manager account can be assigned to one group from the Users screen.
+  // Remove this user from any previous group, then assign the selected group.
+  await prisma.group.updateMany({
+    where: { managerId: userId },
+    data: { managerId: null },
+  });
+
+  if (groupId !== null && groupId !== "") {
+    const id = Number(groupId);
+    if (!Number.isInteger(id)) throw new Error("Invalid group");
+    await prisma.group.update({
+      where: { id },
+      data: {
+        managerId: userId,
+        ...(contactId ? { managerContactId: Number(contactId) } : {}),
+      },
+    });
+  }
+}
+
+// List all users, including their assigned manager group.
 router.get("/", async (req, res) => {
   const users = await prisma.user.findMany({
-    select: { id: true, email: true, name: true, role: true, contactId: true, isMainAdmin:true, createdAt: true },
+    select: {
+      id: true, email: true, name: true, role: true, contactId: true,
+      isMainAdmin: true, createdAt: true,
+      managedGroups: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+    },
     orderBy: { createdAt: "desc" },
   });
   res.json(users);
 });
 
-// Create a user (admin, manager, or plain user)
 router.post("/", async (req, res) => {
-  const { email, password, role, contactId, name, isMainAdmin } = req.body;
+  const { email, password, role, contactId, name, isMainAdmin, groupId } = req.body;
   if (!email || !password || !role) {
     return res.status(400).json({ error: "email, password, and role are required" });
   }
@@ -26,7 +52,6 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "role must be admin, manager, or user" });
   }
 
-  if (isMainAdmin) { const me=await prisma.user.findUnique({where:{id:req.user.id}}); if(!me?.isMainAdmin) return res.status(403).json({error:"Only Main Admin can create another Main Admin"}); }
   const hash = await bcrypt.hash(password, 10);
   try {
     const user = await prisma.user.create({
@@ -35,44 +60,61 @@ router.post("/", async (req, res) => {
         password: hash,
         role,
         name: name || null,
-        contactId: contactId || null,
+        contactId: contactId ? Number(contactId) : null,
         isMainAdmin: !!isMainAdmin,
       },
     });
-    await writeLog(req, "CREATE_USER", { email: user.email, role: user.role });
+
+    if (role === "manager" && groupId !== undefined) {
+      await assignManagerToGroup(user.id, groupId, contactId);
+    }
+
+    await writeLog(req, "CREATE_USER", { email: user.email, role: user.role, groupId: groupId || null });
     res.status(201).json({ id: user.id, email: user.email, name: user.name, role: user.role });
   } catch (err) {
-    res.status(400).json({ error: "Could not create user (email may already be in use)" });
+    console.error(err);
+    res.status(400).json({ error: err.message || "Could not create user (email may already be in use)" });
   }
 });
 
-// Update a user's role, contact link, name, or password
 router.put("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const { role, contactId, password, name, isMainAdmin } = req.body;
+  const { role, contactId, password, name, isMainAdmin, groupId } = req.body;
   const data = {};
   if (role) data.role = role;
-  if (contactId !== undefined) data.contactId = contactId || null;
+  if (contactId !== undefined) data.contactId = contactId ? Number(contactId) : null;
   if (name !== undefined) data.name = name || null;
   if (password) data.password = await bcrypt.hash(password, 10);
   if (isMainAdmin !== undefined) {
-    const me=await prisma.user.findUnique({where:{id:req.user.id}});
-    if (!me?.isMainAdmin) return res.status(403).json({error:"Only Main Admin can change Main Admin status"});
-    const lock=await prisma.appSetting.findUnique({where:{key:"lock_main_admin"}});
-    if (lock?.value === "true" && !me.isMainAdmin) return res.status(403).json({error:"Main Admin changes are locked"});
-    data.isMainAdmin=!!isMainAdmin;
+    const lock = await prisma.appSetting.findUnique({ where: { key: "lock_main_admin" } });
+    if (lock?.value === "true" && !req.user.isMainAdmin) {
+      return res.status(403).json({ error: "Main Admin access is locked by Main Admin settings" });
+    }
+    data.isMainAdmin = !!isMainAdmin;
   }
 
   try {
     const user = await prisma.user.update({ where: { id }, data });
-    await writeLog(req, "UPDATE_USER", { id, changes: Object.keys(data) });
-    res.json({ id: user.id, email: user.email, name: user.name, role: user.role });
+
+    if (role === "manager" || user.role === "manager") {
+      await assignManagerToGroup(user.id, groupId === undefined ? undefined : (groupId || null), contactId !== undefined ? contactId : user.contactId);
+    } else if (role && role !== "manager") {
+      // If a manager is changed to another role, remove their group assignment.
+      await prisma.group.updateMany({ where: { managerId: user.id }, data: { managerId: null } });
+    }
+
+    await writeLog(req, "UPDATE_USER", { id, changes: [...Object.keys(data), groupId !== undefined ? "groupId" : null].filter(Boolean) });
+    const fresh = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, name: true, role: true, contactId: true },
+    });
+    res.json(fresh);
   } catch (err) {
-    res.status(404).json({ error: "User not found" });
+    console.error(err);
+    res.status(400).json({ error: err.message || "Could not update user" });
   }
 });
 
-// Delete a user
 router.delete("/:id", async (req, res) => {
   const id = Number(req.params.id);
   try {
