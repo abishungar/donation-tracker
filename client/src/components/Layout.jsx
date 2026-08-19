@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-import { Menu, X, LogOut, LayoutDashboard, Users2, ScrollText, HeartHandshake, Settings as SettingsIcon } from "lucide-react";
+import { Menu, X, LogOut, LayoutDashboard, Users2, ScrollText, HeartHandshake, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -18,7 +18,8 @@ export default function Layout({ children }) {
   if (user?.role === "admin") {
     links.push(
       { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/admin/logs", label: "Activity Logs", icon: ScrollText }
+      { to: "/admin/logs", label: "Activity Logs", icon: ScrollText },
+      ...(user?.isMainAdmin ? [{ to: "/admin/main-admin", label: "Main Admin", icon: ShieldCheck }] : [])
     );
   }
   if (user?.role === "manager") {

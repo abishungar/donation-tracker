@@ -8,6 +8,7 @@ import ManagerDashboard from "./pages/ManagerDashboard.jsx";
 import UserDashboard from "./pages/UserDashboard.jsx";
 import Logs from "./pages/Logs.jsx";
 import Settings from "./pages/Settings.jsx";
+import MainAdminPage from "./pages/MainAdminPage.jsx";
 
 function Protected({ roles, children }) {
   const { user } = useAuth();
@@ -43,6 +44,14 @@ export default function App() {
         element={
           <Protected roles={["admin"]}>
             <Logs />
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/main-admin"
+        element={
+          <Protected roles={["admin"]}>
+            <MainAdminPage />
           </Protected>
         }
       />
