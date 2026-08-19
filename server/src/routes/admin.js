@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const prisma = require("../db");
 const { authenticate, authorize } = require("../middleware/auth");
 const { writeLog } = require("../utils/log");
-const { sendMail, verifySmtp } = require("../utils/mailer");
+const { sendMail, verifySmtp, diagnoseConfiguredSmtp } = require("../utils/mailer");
 
 const router = express.Router();
 router.use(authenticate, authorize("admin"));
@@ -37,6 +37,21 @@ router.put("/settings", main, async (req, res) => {
   }
   await writeLog(req, "UPDATE_MAIN_ADMIN_SETTINGS", { smtp: true });
   res.json({ success: true });
+});
+
+router.post("/email/diagnose", main, async (req, res) => {
+  try {
+    const result = await diagnoseConfiguredSmtp();
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error("SMTP diagnosis failed:", err);
+    await writeLog(req, "SMTP_DIAGNOSIS_FAILED", { error: err.message, code: err.code || null, stage: err.stage || null });
+    res.status(502).json({
+      error: err.message,
+      code: err.code || null,
+      stage: err.stage || null,
+    });
+  }
 });
 
 router.post("/email/test", main, async (req, res) => {
