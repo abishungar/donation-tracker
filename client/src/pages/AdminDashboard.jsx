@@ -136,28 +136,13 @@ export default function AdminDashboard() {
 
       {tab === "Groups" && (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {groups.map(g=><div key={g.id} className="text-left bg-white rounded-2xl border shadow-sm p-5 hover:border-brand-300 hover:shadow transition">
-            <button onClick={async()=>{try{const r=await api.get(`/groups/${g.id}`);setModal({type:"groupDetail",data:r.data})}catch{}}} className="w-full text-left">
-              <div className="flex justify-between gap-3"><div><h3 className="font-semibold text-gray-800">{g.name}</h3><p className="text-xs text-gray-400 mt-1">{g.activeCount ?? g._count?.contacts ?? 0} contacts · {g.manager?.name||g.manager?.email||"No owner assigned"}</p></div><Pencil size={16} className="text-gray-300"/></div>
+          {groups.map(g=><div key={g.id} className="group bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-brand-200 transition overflow-hidden">
+            <button onClick={async()=>{try{const r=await api.get(`/groups/${g.id}`);setModal({type:"groupDetail",data:r.data})}catch(err){setError(err.response?.data?.error||"Could not load group")}}} className="w-full text-left p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="flex items-center gap-2"><span className="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 grid place-items-center"><Users2 size={18}/></span><div><h3 className="font-bold text-gray-800 truncate">{g.name}</h3><p className="text-xs text-gray-400 mt-0.5">Manager: {g.manager?.name||g.manager?.email||"Unassigned"}</p></div></div></div><span className="text-brand-600 text-sm font-semibold">Open →</span></div>
+              <div className="grid grid-cols-2 gap-3 mt-6"><div className="rounded-2xl bg-gray-50 p-3"><p className="text-[11px] uppercase tracking-wide text-gray-400">Members</p><p className="text-xl font-bold text-gray-800 mt-1">{g.activeCount ?? g._count?.contacts ?? 0}</p></div><div className="rounded-2xl bg-brand-50 p-3"><p className="text-[11px] uppercase tracking-wide text-brand-600">Raised</p><p className="text-xl font-bold text-brand-700 mt-1">${Number(g.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p></div></div>
+              <div className="mt-4 flex items-center justify-between text-xs text-gray-400"><span>${Number(g.monthRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})} this month</span><span>Click anywhere to view options, members & donations</span></div>
             </button>
-            <div className="mt-5"><p className="text-xs uppercase tracking-wide text-gray-400">Total raised</p><p className="text-2xl font-bold text-brand-700">${Number(g.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p><p className="text-xs text-gray-400 mt-1">${Number(g.monthRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})} this month</p></div>
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-sm text-brand-600 font-medium">View contacts & donations →</p>
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={(e)=>{e.stopPropagation();setModal({type:"group",data:g})}} className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 font-medium">
-                  <Pencil size={14} /> Edit Group
-                </button>
-                {user?.isMainAdmin && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: "group", id: g.id, name: g.name }); }}
-                    className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-medium"
-                  >
-                    <Trash2 size={14} /> Delete Group
-                  </button>
-                )}
-              </div>
-            </div>
+            <div className="px-5 py-3 bg-gray-50 border-t flex items-center justify-end gap-4"><button type="button" onClick={()=>setModal({type:"group",data:g})} className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 font-medium"><Pencil size={14}/> Edit Group</button>{user?.isMainAdmin&&<button type="button" onClick={()=>setDeleteTarget({type:"group",id:g.id,name:g.name})} className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-medium"><Trash2 size={14}/> Delete Group</button>}</div>
           </div>)}
           {groups.length===0&&<p className="text-gray-400">No groups yet.</p>}
         </div>
@@ -170,7 +155,7 @@ export default function AdminDashboard() {
             <button onClick={() => setModal({type:"campaign"})} className="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold">+ Add Campaign</button>
           </div>
           <div className="divide-y">
-            {campaigns.map(c => <div key={c.id} className="px-5 py-4 flex items-center justify-between gap-3"><div><p className="font-medium text-gray-800">{c.name}</p><p className="text-xs text-gray-400">{c.description || "No description"} · {c._count?.donations || 0} donations</p></div><div className="flex items-center gap-3"><span className={`text-xs rounded-full px-2 py-1 ${c.active?"bg-green-50 text-green-700":"bg-gray-100 text-gray-500"}`}>{c.active?"Active":"Inactive"}</span><button onClick={()=>setModal({type:"campaign",data:c})} className="text-gray-400 hover:text-brand-600"><Pencil size={15}/></button></div></div>)}
+            {campaigns.map(c => <button key={c.id} onClick={async()=>{try{const r=await api.get(`/campaigns/${c.id}`);setModal({type:"campaignDetail",data:r.data})}catch(err){setError(err.response?.data?.error||"Could not load campaign")}}} className="w-full text-left px-5 py-4 flex items-center justify-between gap-3 hover:bg-brand-50/50 transition"><div><p className="font-semibold text-gray-800">{c.name}</p><p className="text-xs text-gray-400 mt-1">{c.description || "No description"} · {c._count?.donations || 0} donations</p></div><div className="flex items-center gap-3"><span className={`text-xs rounded-full px-2 py-1 ${c.active?"bg-green-50 text-green-700":"bg-gray-100 text-gray-500"}`}>{c.active?"Active":"Inactive"}</span><span className="text-xs text-brand-600 font-semibold">View donations →</span><span role="button" tabIndex={0} onClick={e=>{e.stopPropagation();setModal({type:"campaign",data:c})}} className="text-gray-400 hover:text-brand-600"><Pencil size={15}/></span></div></button>)}
             {!campaigns.length && <p className="px-5 py-6 text-sm text-gray-400">No campaigns yet.</p>}
           </div>
         </div>
@@ -249,6 +234,7 @@ export default function AdminDashboard() {
       {modal?.type === "campaign" && (
         <CampaignModal campaign={modal.data} onClose={closeModal} onSaved={onSaved} />
       )}
+      {modal?.type === "campaignDetail" && <CampaignDetailModal campaign={modal.data} onClose={closeModal} onEdit={()=>setModal({type:"campaign",data:modal.data})} />}
       {modal?.type === "user" && (
         <UserModal contacts={contacts} groups={groups} user={modal.data} onClose={closeModal} onSaved={onSaved} />
       )}
@@ -270,6 +256,11 @@ export default function AdminDashboard() {
       )}
     </Layout>
   );
+}
+
+function CampaignDetailModal({campaign,onClose,onEdit}){
+  const donations=campaign?.donations||[];
+  return <div className="fixed inset-0 z-50 bg-black/40 p-4 overflow-auto"><div className="bg-white rounded-2xl max-w-5xl mx-auto my-8 shadow-xl overflow-hidden"><div className="p-5 border-b flex items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-gray-800">{campaign.name}</h2><p className="text-sm text-gray-500 mt-1">{campaign.description||"No description"}</p></div><div className="flex gap-2"><button onClick={onEdit} className="px-3 py-1.5 text-sm text-brand-600">Edit</button><button onClick={onClose} className="px-3 py-1.5 text-sm text-gray-500">Close</button></div></div><div className="p-5"><div className="grid sm:grid-cols-3 gap-3 mb-5"><div className="rounded-xl bg-brand-50 p-4"><p className="text-xs text-gray-500">Total Raised</p><p className="text-2xl font-bold text-brand-700 mt-1">${Number(campaign.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p></div><div className="rounded-xl bg-gray-50 p-4"><p className="text-xs text-gray-500">Donations</p><p className="text-2xl font-bold text-gray-800 mt-1">{donations.length}</p></div><div className="rounded-xl bg-gray-50 p-4"><p className="text-xs text-gray-500">Status</p><p className="text-lg font-semibold mt-1">{campaign.active?"Active":"Inactive"}</p></div></div><div className="border rounded-xl overflow-hidden"><div className="px-4 py-3 bg-gray-50 border-b font-semibold text-sm">All Campaign Donations</div><div className="divide-y">{donations.map(d=><div key={d.id} className="px-4 py-3 flex items-center justify-between gap-4"><div><p className="font-medium text-gray-800">{d.contact?.firstName} {d.contact?.lastName}</p><p className="text-xs text-gray-400">{d.group?.name||"No group"} · {new Date(d.date).toLocaleDateString()} · {d.type}</p></div><b className="text-brand-700">${Number(d.amount||0).toLocaleString(undefined,{minimumFractionDigits:2})}</b></div>)}{!donations.length&&<p className="p-5 text-sm text-gray-400">No donations for this campaign yet.</p>}</div></div></div></div></div>;
 }
 
 function GroupDetailModal({ group, onClose, onAddDonation, onContact }) {

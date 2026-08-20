@@ -14,20 +14,22 @@ router.post("/login", async (req, res) => {
   const email = String(req.body?.email || "").toLowerCase().trim();
   const password = String(req.body?.password || "");
   const pin = String(req.body?.pin || "");
+  const credential = String(req.body?.credential || "");
   if (!email) return res.status(400).json({ error: "Email is required" });
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return res.status(401).json({ error: "Invalid email or PIN/password" });
 
   let valid = false;
-  if (pin) {
-    if (user.role !== "user") return res.status(401).json({ error: "Administrators and managers must use password login." });
+  const supplied = credential || pin || password;
+  if (!supplied) return res.status(400).json({ error: "Enter your PIN or password" });
+
+  // One login screen for everyone. The server determines the credential type from the account role.
+  if (user.role === "user") {
     if (!user.pinHash) return res.status(401).json({ error: "No PIN is set for this account. Use the email link to set up your PIN." });
-    valid = await bcrypt.compare(pin, user.pinHash);
-  } else if (password) {
-    valid = await bcrypt.compare(password, user.password);
+    valid = await bcrypt.compare(supplied, user.pinHash);
   } else {
-    return res.status(400).json({ error: "Enter your PIN or password" });
+    valid = await bcrypt.compare(supplied, user.password);
   }
   if (!valid) return res.status(401).json({ error: "Invalid email or PIN/password" });
 

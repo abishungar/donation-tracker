@@ -9,6 +9,22 @@ router.get("/", authorize("admin", "manager"), async (req,res)=>{
   const campaigns = await prisma.campaign.findMany({ orderBy:[{active:"desc"},{createdAt:"desc"}], include:{_count:{select:{donations:true}}} });
   res.json(campaigns);
 });
+
+router.get("/:id", authorize("admin", "manager"), async (req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isInteger(id)) return res.status(400).json({error:"Invalid campaign"});
+  const campaign=await prisma.campaign.findUnique({where:{id}});
+  if(!campaign) return res.status(404).json({error:"Campaign not found"});
+  const where={campaignId:id};
+  if(req.user.role==="manager") {
+    const groups=await prisma.group.findMany({where:{managerId:req.user.id},select:{id:true}});
+    where.groupId={in:groups.map(g=>g.id)};
+  }
+  const donations=await prisma.donation.findMany({where,include:{contact:true,group:true},orderBy:{date:"desc"}});
+  const total=donations.reduce((sum,d)=>sum+Number(d.amount||0),0);
+  res.json({...campaign,donations,totalRaised:total});
+});
+
 router.post("/", authorize("admin"), async (req,res)=>{
   const {name,description,active=true}=req.body;
   if(!name?.trim()) return res.status(400).json({error:"Campaign name is required"});
