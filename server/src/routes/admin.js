@@ -23,12 +23,11 @@ router.get("/settings", main, async (req, res) => {
   o.smtp_host = o.smtp_host || "smtp.gmail.com";
   o.smtp_port = o.smtp_port || "465";
   o.smtp_secure = o.smtp_secure ?? "true";
-  o.lock_main_admin = o.lock_main_admin || "false";
   res.json(o);
 });
 
 router.put("/settings", main, async (req, res) => {
-  const allowed = ["smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from", "lock_main_admin"];
+  const allowed = ["smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from"];
   for (const key of allowed) {
     const value = req.body?.[key];
     if (value !== undefined && value !== "") {
@@ -51,6 +50,20 @@ router.post("/email/test", main, async (req, res) => {
     console.error("SMTP test failed:", err);
     await writeLog(req, "TEST_EMAIL_FAILED", { to, error: err.message });
     res.status(502).json({ error: `SMTP test failed: ${err.message}` });
+  }
+});
+
+router.put("/users/:id/main-admin", main, async (req, res) => {
+  const id = Number(req.params.id);
+  const isMainAdmin = Boolean(req.body?.isMainAdmin);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Invalid user id" });
+  if (id === req.user.id && !isMainAdmin) return res.status(400).json({ error: "You cannot remove your own Main Admin access from this screen." });
+  try {
+    const target = await prisma.user.update({ where: { id }, data: { isMainAdmin } });
+    await writeLog(req, isMainAdmin ? "GRANT_MAIN_ADMIN" : "REMOVE_MAIN_ADMIN", { userId: id });
+    res.json({ success: true, user: { id: target.id, email: target.email, name: target.name, isMainAdmin: target.isMainAdmin } });
+  } catch (err) {
+    res.status(404).json({ error: "User not found" });
   }
 });
 

@@ -61,7 +61,7 @@ router.post("/", async (req, res) => {
         role,
         name: name || null,
         contactId: contactId ? Number(contactId) : null,
-        isMainAdmin: !!isMainAdmin,
+        isMainAdmin: false,
       },
     });
 
@@ -86,11 +86,7 @@ router.put("/:id", async (req, res) => {
   if (name !== undefined) data.name = name || null;
   if (password) data.password = await bcrypt.hash(password, 10);
   if (isMainAdmin !== undefined) {
-    const lock = await prisma.appSetting.findUnique({ where: { key: "lock_main_admin" } });
-    if (lock?.value === "true" && !req.user.isMainAdmin) {
-      return res.status(403).json({ error: "Main Admin access is locked by Main Admin settings" });
-    }
-    data.isMainAdmin = !!isMainAdmin;
+    return res.status(403).json({ error: "Main Admin status can only be changed from Main Admin." });
   }
 
   try {

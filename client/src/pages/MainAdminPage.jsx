@@ -42,21 +42,6 @@ export default function MainAdminPage() {
 
   useEffect(() => { load(); loadGroups(); }, []);
 
-  async function saveProtection() {
-    setSaving(true); setError(""); setMessage("");
-    try {
-      await api.put("/admin/settings", {
-        lock_main_admin: settings.lock_main_admin === "true" ? "true" : "false",
-      });
-      setMessage("Main Admin protection settings saved.");
-      await load();
-    } catch (e) {
-      setError(e.response?.data?.error || "Could not save protection settings");
-    } finally { setSaving(false); }
-  }
-
-  const locked = settings.lock_main_admin === "true";
-
   async function confirmDeleteGroup() {
     if (!deleteGroup) return;
     setError("");
@@ -88,38 +73,6 @@ export default function MainAdminPage() {
           <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="font-semibold text-gray-800">Main Admin Protection</h2>
-                <p className="text-sm text-gray-500 mt-1">Control who is allowed to assign or remove Main Admin privileges.</p>
-              </div>
-              <ShieldCheck className="text-brand-600" size={22} />
-            </div>
-
-            <label className="mt-5 flex items-start gap-3 p-4 rounded-xl border bg-gray-50 cursor-pointer">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4"
-                checked={locked}
-                onChange={(e) => setSettings(s => ({ ...s, lock_main_admin: e.target.checked ? "true" : "false" }))}
-              />
-              <span>
-                <span className="block font-medium text-gray-800">Require Main Admin protection</span>
-                <span className="block text-sm text-gray-500 mt-1">
-                  When enabled, only an existing Main Admin can change another user's Main Admin status.
-                </span>
-              </span>
-            </label>
-
-            <div className="mt-4 flex items-center justify-between gap-4">
-              <p className="text-sm text-gray-500">Current status: <strong>{locked ? "Protected" : "Unprotected"}</strong></p>
-              <button onClick={saveProtection} disabled={saving} className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl font-medium">
-                <Save size={15} className="inline mr-2" />{saving ? "Saving..." : "Save Protection"}
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
                 <h2 className="font-semibold text-gray-800">Group Management</h2>
                 <p className="text-sm text-gray-500 mt-1">Main Admin can rename groups and permanently delete groups.</p>
               </div>
@@ -143,6 +96,37 @@ export default function MainAdminPage() {
                 </div>
               ))}
               {!groups.length && <p className="p-4 text-sm text-gray-400">No groups yet.</p>}
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-semibold text-gray-800">Main Admin Users</h2>
+                <p className="text-sm text-gray-500 mt-1">Only Main Admin can grant or remove Main Admin privileges.</p>
+              </div>
+              <ShieldCheck className="text-brand-600" size={22} />
+            </div>
+            <div className="mt-5 divide-y border rounded-xl overflow-hidden">
+              {users.map((u) => (
+                <div key={u.id} className="p-4 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-800 truncate">{u.name || u.email}</p>
+                    <p className="text-xs text-gray-400 mt-1">{u.email} · {u.role}</p>
+                  </div>
+                  <button type="button" onClick={async () => {
+                    setError(""); setMessage("");
+                    try {
+                      await api.put(`/admin/users/${u.id}/main-admin`, { isMainAdmin: !u.isMainAdmin });
+                      setUsers(xs => xs.map(x => x.id === u.id ? { ...x, isMainAdmin: !x.isMainAdmin } : x));
+                      setMessage(`${u.name || u.email} is now ${!u.isMainAdmin ? "a Main Admin" : "not a Main Admin"}.`);
+                    } catch (e) { setError(e.response?.data?.error || "Could not change Main Admin status"); }
+                  }} className={`px-3 py-2 rounded-lg text-sm font-medium ${u.isMainAdmin ? "bg-brand-100 text-brand-700" : "border text-gray-600 hover:bg-gray-50"}`}>
+                    {u.isMainAdmin ? "Main Admin ✓" : "Set as Main Admin"}
+                  </button>
+                </div>
+              ))}
+              {!users.length && <p className="p-4 text-sm text-gray-400">No users yet.</p>}
             </div>
           </div>
 
