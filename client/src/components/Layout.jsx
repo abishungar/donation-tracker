@@ -5,7 +5,7 @@ import { Menu, X, LogOut, LayoutDashboard, Users2, ScrollText, HeartHandshake, S
 import api from "../api";
 
 export default function Layout({ children }) {
-  const { user, logout } = useAuth();
+  const { user, logout, loginNotice, clearLoginNotice } = useAuth();
   const [open, setOpen] = useState(false);
   const [appName, setAppName] = useState("Donation Tracker");
   React.useEffect(() => { api.get("/auth/config").then(r => setAppName(r.data?.appName || "Donation Tracker")).catch(() => {}); }, []);
@@ -26,6 +26,7 @@ export default function Layout({ children }) {
     </div>
   );
   return <div className="min-h-screen bg-gray-50">
+    {loginNotice && <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-gray-900">{loginNotice.title}</h2><p className="text-gray-600 mt-3 whitespace-pre-wrap leading-6">{loginNotice.message}</p></div><button onClick={clearLoginNotice} className="text-gray-400 hover:text-gray-700 text-xl">×</button></div><button onClick={clearLoginNotice} className="mt-6 w-full bg-brand-600 text-white rounded-xl py-3 font-semibold">Continue</button></div></div>}
     <aside className="hidden sm:flex fixed inset-y-0 left-0 z-30 w-64 bg-gray-900 overflow-hidden">{SidebarContent}</aside>
     <div className="sm:ml-64 min-h-screen">
       <div className="sm:hidden sticky top-0 z-20 bg-gray-900 flex items-center justify-between px-4 py-3"><div className="flex items-center gap-2"><div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center"><HeartHandshake size={15} className="text-white"/></div><span className="font-semibold text-white text-sm truncate">{appName}</span></div><button onClick={()=>setOpen(true)} className="text-white p-1"><Menu size={22}/></button></div>

@@ -3,6 +3,9 @@ const bcrypt = require("bcryptjs");
 const prisma = require("../db");
 const { authenticate, authorize } = require("../middleware/auth");
 const { writeLog } = require("../utils/log");
+const { sendMail, settings: getMailSettings } = require("../utils/mailer");
+const { createAccessLink } = require("./auth");
+const crypto = require("crypto");
 
 const router = express.Router();
 router.use(authenticate, authorize("admin"));
@@ -44,36 +47,25 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { email, password, role, contactId, name, isMainAdmin, groupId } = req.body;
-  if (!email || !password || !role) {
-    return res.status(400).json({ error: "email, password, and role are required" });
-  }
-  if (isMainAdmin && !req.user.isMainAdmin) {
-    return res.status(403).json({ error: "Only Main Admin can assign Main Admin status" });
-  }
-  if (!["admin", "manager", "user"].includes(role)) {
-    return res.status(400).json({ error: "role must be admin, manager, or user" });
-  }
+  const { email, role, contactId, name, isMainAdmin, groupId } = req.body;
+  if (!email || !role) return res.status(400).json({ error: "email and role are required" });
+  if (isMainAdmin && !req.user.isMainAdmin) return res.status(403).json({ error: "Only Main Admin can assign Main Admin status" });
+  if (!req.user.isMainAdmin && isMainAdmin) return res.status(403).json({ error: "Only Main Admin can assign Main Admin status" });
+  if (!["admin", "manager", "user"].includes(role)) return res.status(400).json({ error: "role must be admin, manager, or user" });
 
-  const hash = await bcrypt.hash(password, 10);
   try {
+    const emailNorm = email.toLowerCase().trim();
+    const tempHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
     const user = await prisma.user.create({
-      data: {
-        email: email.toLowerCase().trim(),
-        password: hash,
-        role,
-        name: name || null,
-        contactId: contactId ? Number(contactId) : null,
-        isMainAdmin: !!isMainAdmin,
-      },
+      data: { email: emailNorm, password: tempHash, role, name: name || null, contactId: contactId ? Number(contactId) : null, isMainAdmin: !!isMainAdmin, passwordSet: false }
     });
-
-    if (role === "manager" && groupId !== undefined) {
-      await assignManagerToGroup(user.id, groupId, contactId);
-    }
-
-    await writeLog(req, "CREATE_USER", { email: user.email, role: user.role, groupId: groupId || null });
-    res.status(201).json({ id: user.id, email: user.email, name: user.name, role: user.role });
+    if (role === "manager" && groupId !== undefined) await assignManagerToGroup(user.id, groupId, contactId);
+    let inviteSent = false;
+    let inviteError = "";
+    try { await createAccessLink(req, user, role === "user" ? "pin" : "password"); inviteSent = true; }
+    catch (e) { inviteError = e.message || "Could not send invite email"; }
+    await writeLog(req, "CREATE_USER", { email: user.email, role: user.role, groupId: groupId || null, inviteSent });
+    res.status(201).json({ id: user.id, email: user.email, name: user.name, role: user.role, inviteSent, inviteError });
   } catch (err) {
     console.error(err);
     res.status(400).json({ error: err.message || "Could not create user (email may already be in use)" });
@@ -87,9 +79,18 @@ router.put("/:id", async (req, res) => {
   if (role) data.role = role;
   if (contactId !== undefined) data.contactId = contactId ? Number(contactId) : null;
   if (name !== undefined) data.name = name || null;
-  if (password) data.password = await bcrypt.hash(password, 10);
+  if (password) {
+    if (!req.user.isMainAdmin) return res.status(403).json({ error: "Only Main Admin can reset or change another user's password." });
+    data.password = await bcrypt.hash(password, 10);
+    data.passwordSet = true;
+  }
   if (isMainAdmin !== undefined) {
     if (!req.user.isMainAdmin) return res.status(403).json({ error: "Only Main Admin can change Main Admin status" });
+    if (!isMainAdmin) {
+      const current = await prisma.user.findUnique({ where: { id }, select: { isMainAdmin: true } });
+      const count = await prisma.user.count({ where: { isMainAdmin: true } });
+      if (current?.isMainAdmin && count <= 1) return res.status(400).json({ error: "The system must always have at least one Main Admin." });
+    }
     data.isMainAdmin = !!isMainAdmin;
   }
 

@@ -37,6 +37,17 @@ export default function ImportExportPanel() {
   const [donationRows,setDonationRows]=useState([]), [headers,setHeaders]=useState([]), [mapping,setMapping]=useState({}), [fileName,setFileName]=useState("");
   const [preview,setPreview]=useState(false);
 
+
+  function downloadContactTemplate(){
+    const rows=[{firstName:"Jane",lastName:"Doe",email:"donor@example.com",phone:"555-123-4567",group:"Sample Group",active:true}];
+    const ws=XLSX.utils.json_to_sheet(rows); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Contacts"); XLSX.writeFile(wb,"contact-import-template.xlsx"); setMessage("Sample contact sheet downloaded. Fill it in and upload it below.");
+  }
+
+  function downloadDonationTemplate(){
+    const rows=[{contact:"",email:"donor@example.com",firstName:"Jane",lastName:"Doe",phone:"555-123-4567",group:"Sample Group",amount:100,date:new Date().toISOString().slice(0,10),type:"Online"}];
+    const ws=XLSX.utils.json_to_sheet(rows); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Donations"); XLSX.writeFile(wb,"donation-import-template.xlsx"); setMessage("Sample donation sheet downloaded. Fill it in and upload it below.");
+  }
+
   async function exportData(format){setBusy(true);setMessage("");setError("");try{const r=await api.get("/admin/export"),data=r.data||{},stamp=new Date().toISOString().slice(0,10);if(format==="json")downloadBlob(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),`donation-tracker-backup-${stamp}.json`);else downloadBlob(new Blob([contactsToCsv(data.contacts||[])],{type:"text/csv;charset=utf-8"}),`donation-tracker-contacts-${stamp}.csv`);setMessage(format==="json"?"Full backup exported.":"Contacts CSV exported.");}catch(e){setError(e.response?.data?.error||"Could not export data.");}finally{setBusy(false);}}
 
   async function importContacts(file){if(!file)return;setBusy(true);setMessage("");setError("");try{const text=await file.text();let rows;if(file.name.toLowerCase().endsWith(".json")){const parsed=JSON.parse(text);rows=Array.isArray(parsed)?parsed:(parsed.contacts||[]).map(c=>({firstName:c.firstName,lastName:c.lastName,phone:c.phone||"",email:c.email||"",group:c.group?.name||"",active:c.active!==false}));}else rows=parseCsv(text);if(!rows.length)throw new Error("No importable contact rows were found.");const r=await api.post("/admin/import",{rows});setMessage(`Contact import complete. ${r.data?.created??0} contact(s) added.`);if(contactInputRef.current)contactInputRef.current.value="";}catch(e){setError(e.response?.data?.error||e.message||"Could not import contacts.");}finally{setBusy(false);}}
@@ -50,12 +61,12 @@ export default function ImportExportPanel() {
     <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
       <button disabled={busy} onClick={()=>exportData("json")} className="border rounded-xl px-4 py-3 text-left hover:border-brand-300 disabled:opacity-50"><Download size={17} className="inline mr-2 text-brand-600"/><span className="font-medium">Export Full Backup</span><span className="block text-xs text-gray-400 mt-1">JSON with contacts, groups, users and donations.</span></button>
       <button disabled={busy} onClick={()=>exportData("csv")} className="border rounded-xl px-4 py-3 text-left hover:border-brand-300 disabled:opacity-50"><FileSpreadsheet size={17} className="inline mr-2 text-brand-600"/><span className="font-medium">Export Contacts CSV</span><span className="block text-xs text-gray-400 mt-1">Easy to edit in Excel or Google Sheets.</span></button>
-      <button disabled={busy} onClick={()=>contactInputRef.current?.click()} className="border rounded-xl px-4 py-3 text-left hover:border-brand-300 disabled:opacity-50"><Upload size={17} className="inline mr-2 text-brand-600"/><span className="font-medium">Import Contacts</span><span className="block text-xs text-gray-400 mt-1">CSV or JSON contacts.</span></button>
+      <button disabled={busy} onClick={downloadContactTemplate} className="border rounded-xl px-4 py-3 text-left hover:border-brand-300 disabled:opacity-50"><FileSpreadsheet size={17} className="inline mr-2 text-brand-600"/><span className="font-medium">Download Contact Sample</span><span className="block text-xs text-gray-400 mt-1">Fill it in Excel/Sheets and upload it back.</span></button><button disabled={busy} onClick={()=>contactInputRef.current?.click()} className="border rounded-xl px-4 py-3 text-left hover:border-brand-300 disabled:opacity-50"><Upload size={17} className="inline mr-2 text-brand-600"/><span className="font-medium">Import Contacts</span><span className="block text-xs text-gray-400 mt-1">CSV or JSON contacts.</span></button>
       <input ref={contactInputRef} type="file" accept=".csv,.json,application/json,text/csv" className="hidden" onChange={e=>importContacts(e.target.files?.[0])}/>
     </div>
 
     <div className="mt-6 border-t pt-6"><div className="flex items-center gap-2"><Database size={19} className="text-brand-600"/><h3 className="font-semibold text-gray-800">Import Donations From Sheet</h3></div><p className="text-sm text-gray-500 mt-1">Upload an Excel file (.xlsx/.xls) or CSV exported from Google Sheets, then map your columns before importing.</p>
-      <button disabled={busy} onClick={()=>donationInputRef.current?.click()} className="mt-4 border rounded-xl px-4 py-3 hover:border-brand-300 disabled:opacity-50"><Upload size={17} className="inline mr-2 text-brand-600"/>{fileName||"Choose Donation Sheet"}</button>
+      <div className="mt-4 flex flex-wrap gap-2"><button disabled={busy} onClick={downloadDonationTemplate} className="border rounded-xl px-4 py-3 hover:border-brand-300 disabled:opacity-50"><FileSpreadsheet size={17} className="inline mr-2 text-brand-600"/>Download Sample Sheet</button><button disabled={busy} onClick={()=>donationInputRef.current?.click()} className="border rounded-xl px-4 py-3 hover:border-brand-300 disabled:opacity-50"><Upload size={17} className="inline mr-2 text-brand-600"/>{fileName||"Choose Donation Sheet"}</button></div>
       <input ref={donationInputRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="hidden" onChange={e=>readDonationSheet(e.target.files?.[0])}/>
     </div>
 

@@ -11,53 +11,54 @@ const { sendMail, settings: getMailSettings } = require("../utils/mailer");
 const router = express.Router();
 
 // Public app configuration used by the login page and site chrome.
+router.get("/bootstrap/status", async (req, res) => {
+  const count = await prisma.user.count({ where: { isMainAdmin: true } });
+  res.json({ needsSetup: count === 0 });
+});
+
+router.post("/bootstrap/create", async (req, res) => {
+  const { name, email, password } = req.body || {};
+  if (!name || !email || !password) return res.status(400).json({ error: "Name, email, and password are required" });
+  if (String(password).length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+  const existingMain = await prisma.user.count({ where: { isMainAdmin: true } });
+  if (existingMain > 0) return res.status(403).json({ error: "First-time setup is already complete" });
+  try {
+    const hash = await bcrypt.hash(String(password), 10);
+    const user = await prisma.user.create({ data: { name: String(name).trim(), email: String(email).toLowerCase().trim(), password: hash, role: "admin", isMainAdmin: true, passwordSet: true } });
+    await prisma.log.create({ data: { userId: user.id, userEmail: user.email, action: "CREATE_FIRST_MAIN_ADMIN" } });
+    res.status(201).json({ success: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message || "Could not create the first Main Admin" });
+  }
+});
+
 router.get("/config", async (req, res) => {
-  const [row, legacy, mainAdminCount] = await Promise.all([
+  const [row, legacy, version, mainAdmins] = await Promise.all([
     prisma.appSetting.findUnique({ where: { key: "app_name" } }),
     prisma.appSetting.findUnique({ where: { key: "email_system_name" } }),
+    prisma.appSetting.findUnique({ where: { key: "app_version" } }),
     prisma.user.count({ where: { isMainAdmin: true } }),
   ]);
   res.json({
     appName: String(row?.value || legacy?.value || process.env.APP_NAME || "Donation Tracker").trim(),
-    setupRequired: mainAdminCount === 0,
+    version: String(version?.value || process.env.APP_VERSION || "").trim(),
+    needsFirstMainAdmin: mainAdmins === 0,
   });
 });
 
-// First-run bootstrap. This endpoint is intentionally public only while the
-// database has zero Main Admins. Once the first Main Admin exists it becomes
-// permanently unavailable unless all Main Admins are removed by an existing
-// Main Admin. A Postgres advisory lock prevents two simultaneous first-run
-// requests from creating two bootstrap accounts.
-router.post("/bootstrap-main-admin", async (req, res) => {
-  const name = String(req.body?.name || "").trim();
+// First-run bootstrap. This route is only usable while there are zero Main Admins.
+router.post("/setup-first-main-admin", async (req, res) => {
+  const count = await prisma.user.count({ where: { isMainAdmin: true } });
+  if (count > 0) return res.status(403).json({ error: "Initial setup is already complete." });
   const email = String(req.body?.email || "").toLowerCase().trim();
+  const name = String(req.body?.name || "").trim();
   const password = String(req.body?.password || "");
-  if (!name) return res.status(400).json({ error: "Name is required" });
-  if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: "A valid email is required" });
-  if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
-
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(91427361)");
-      const count = await tx.user.count({ where: { isMainAdmin: true } });
-      if (count > 0) throw Object.assign(new Error("First Main Admin has already been created. Please sign in."), { code: "SETUP_COMPLETE" });
-      const existing = await tx.user.findUnique({ where: { email } });
-      if (existing) throw Object.assign(new Error("An account with this email already exists."), { code: "EMAIL_EXISTS" });
-      const hash = await bcrypt.hash(password, 12);
-      const user = await tx.user.create({
-        data: { email, name, password: hash, passwordSet: true, role: "admin", isMainAdmin: true },
-        select: { id: true, email: true, name: true, role: true, contactId: true, isMainAdmin: true },
-      });
-      await tx.log.create({ data: { userId: user.id, userEmail: user.email, action: "CREATE_FIRST_MAIN_ADMIN", details: JSON.stringify({ bootstrap: true }) } });
-      return user;
-    });
-    res.status(201).json({ success: true, user: result, message: "First Main Admin created. You can now sign in." });
-  } catch (err) {
-    if (err.code === "SETUP_COMPLETE") return res.status(409).json({ error: err.message });
-    if (err.code === "EMAIL_EXISTS") return res.status(409).json({ error: err.message });
-    console.error("Bootstrap Main Admin failed:", err);
-    res.status(500).json({ error: "Could not create the first Main Admin" });
-  }
+  if (!email || !name || password.length < 8) return res.status(400).json({ error: "Name, email, and a password of at least 8 characters are required." });
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) return res.status(400).json({ error: "A user with this email already exists. Use a different email." });
+  const hash = await bcrypt.hash(password, 10);
+  const user = await prisma.user.create({ data: { email, name, password: hash, role: "admin", isMainAdmin: true, passwordSet: true } });
+  res.status(201).json({ success: true, user: { id: user.id, email: user.email, name: user.name, role: user.role, isMainAdmin: true } });
 });
 
 router.post("/login", async (req, res) => {
@@ -100,7 +101,12 @@ router.post("/login", async (req, res) => {
   );
 
   await prisma.log.create({ data: { userId: user.id, userEmail: user.email, action: "LOGIN" } });
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId, isMainAdmin: user.isMainAdmin } });
+  const noticeRows = await prisma.appSetting.findMany({ where: { key: { in: ["login_notice_enabled","login_notice_audience","login_notice_title","login_notice_message"] } } });
+  const notice = Object.fromEntries(noticeRows.map(r => [r.key, r.value]));
+  const enabled = String(notice.login_notice_enabled || "false") === "true";
+  const audience = notice.login_notice_audience || "all";
+  const applies = enabled && (audience === "all" || audience === user.role) && ["admin","manager"].includes(user.role);
+  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId, isMainAdmin: user.isMainAdmin }, loginNotice: applies ? { title: notice.login_notice_title || "Notice", message: notice.login_notice_message || "" } : null });
 });
 
 router.get("/me", authenticate, async (req, res) => {
@@ -165,20 +171,11 @@ router.post("/request-pin-link", async (req, res) => {
   res.json({ success: true, message: "If your active contact record has this email, a PIN setup link has been sent." });
 });
 
-router.post("/request-password-link", async (req,res)=>{
-  const email=(req.body.email||"").toLowerCase().trim();
-  if (!email) return res.status(400).json({error:"Email is required"});
-  let user=await prisma.user.findUnique({where:{email}});
-  if (!user) {
-    const contact=await prisma.contact.findUnique({where:{email}});
-    if (contact) user=await prisma.user.create({data:{email,password:await bcrypt.hash(crypto.randomBytes(24).toString("hex"),10),role:"user",contactId:contact.id,name:`${contact.firstName} ${contact.lastName}`.trim(),passwordSet:false}});
-  }
-  if (user) { try { await createAccessLink(req, user, "password"); } catch(e) { return res.status(503).json({error:`Email could not be sent: ${e.message}`}); } }
-  res.json({success:true,message:"If the email exists, a password link has been sent."});
-});
 router.post("/set-password", async (req,res)=>{
  const {token,password}=req.body; if(!token||!password||password.length<6)return res.status(400).json({error:"A valid token and a password of at least 6 characters are required"});
  const row=await prisma.passwordResetToken.findUnique({where:{token}}); if(!row||row.expiresAt<new Date())return res.status(400).json({error:"This password link is invalid or expired"});
+ const target=await prisma.user.findUnique({where:{id:row.userId}});
+ if(!target || !["admin","manager"].includes(target.role)) return res.status(400).json({error:"This password link is not valid for this account"});
  const hash=await bcrypt.hash(password,10); await prisma.user.update({where:{id:row.userId},data:{password:hash,passwordSet:true}}); await prisma.passwordResetToken.delete({where:{id:row.id}}); res.json({success:true});
 });
 
@@ -195,3 +192,4 @@ router.post("/set-pin", async (req,res)=>{
 });
 
 module.exports = router;
+module.exports.createAccessLink = createAccessLink;

@@ -4,6 +4,7 @@ const prisma = require("../db");
 const { authenticate, authorize } = require("../middleware/auth");
 const { writeLog } = require("../utils/log");
 const { sendMail, verifySmtp, getEmailConfig } = require("../utils/mailer");
+const { createAccessLink } = require("./auth");
 
 const router = express.Router();
 router.use(authenticate, authorize("admin"));
@@ -27,6 +28,9 @@ router.get("/settings", main, async (req, res) => {
 router.put("/settings", main, async (req, res) => {
   const allowed = [
     "app_name",
+    "website_version",
+    "app_version",
+    "login_notice_enabled", "login_notice_audience", "login_notice_title", "login_notice_message",
     "email_mode",
     "smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from",
     "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry", "email_system_name", "email_from_address",
@@ -67,9 +71,21 @@ router.post("/email/test", main, async (req, res) => {
 
 router.post("/users/:id/reset-password", main, async (req, res) => {
   const id = Number(req.params.id);
-  const hash = await bcrypt.hash(req.body.password || "ChangeMe123!", 10);
-  await prisma.user.update({ where: { id }, data: { password: hash, passwordSet: true } });
-  res.json({ success: true });
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) return res.status(404).json({ error: "User not found" });
+  const crypto = require("crypto");
+  const token = crypto.randomBytes(32).toString("hex");
+  await prisma.passwordResetToken.deleteMany({ where: { userId: id } });
+  await prisma.passwordResetToken.create({ data: { token, userId: id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
+  const base = String(process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+  const kind = user.role === "user" ? "set-pin" : "set-password";
+  const link = `${base}/${kind}?token=${encodeURIComponent(token)}`;
+  const cfg = await getEmailConfig();
+  const systemName = String(cfg.app_name || cfg.email_system_name || process.env.APP_NAME || "Donation Tracker").trim();
+  const subject = user.role === "user" ? `Set up your ${systemName} PIN` : `Set your ${systemName} password`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;background:#f5f7fb;padding:30px"><div style="background:#111827;color:#fff;padding:24px;border-radius:16px 16px 0 0"><h2 style="margin:0">${systemName}</h2></div><div style="background:#fff;padding:30px;border-radius:0 0 16px 16px"><p>Hello ${String(user.name || user.email).replace(/[<>]/g, "")},</p><p>A Main Admin requested a new login credential for your account.</p><p><a href="${link}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:13px 20px;border-radius:9px;font-weight:700">Set Up Credential</a></p><p style="color:#6b7280;font-size:13px">This secure link expires in 1 hour.</p></div></div>`;
+  try { await sendMail(user.email, subject, html, { name: systemName, from: cfg.email_from_address || cfg.smtp_from || cfg.smtp_user || "" }); } catch (e) { return res.status(502).json({ error: `Could not send reset invitation: ${e.message}` }); }
+  res.json({ success: true, message: `A credential setup link was sent to ${user.email}.` });
 });
 
 router.post("/users/:id/reset-pin", main, async (req, res) => {
@@ -77,6 +93,20 @@ router.post("/users/:id/reset-pin", main, async (req, res) => {
   if (pin.length < 4) return res.status(400).json({ error: "PIN must be at least 4 characters" });
   await prisma.user.update({ where: { id }, data: { pinHash: await bcrypt.hash(pin, 10) } });
   res.json({ success: true });
+});
+
+router.post("/users/:id/invite", main, async (req, res) => {
+  const id = Number(req.params.id);
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) return res.status(404).json({ error: "User not found" });
+  if (user.role === "user") return res.status(400).json({ error: "Contacts use PIN setup links instead." });
+  try {
+    await createAccessLink(req, user, "password");
+    await writeLog(req, "SEND_USER_INVITE", { userId: id, email: user.email });
+    res.json({ success: true, message: `Password setup link sent to ${user.email}.` });
+  } catch (e) {
+    res.status(502).json({ error: `Invite email could not be sent: ${e.message}` });
+  }
 });
 
 router.get("/export", main, async (req, res) => {

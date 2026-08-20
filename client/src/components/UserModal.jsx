@@ -7,7 +7,6 @@ export default function UserModal({ contacts, groups = [], user, onClose, onSave
   const [form, setForm] = useState({
     name: user?.name || "",
     email: user?.email || "",
-    password: "",
     role: user?.role || "user",
     contactId: user?.contactId || "",
     groupId: user?.managedGroups?.[0]?.id || "",
@@ -21,8 +20,7 @@ export default function UserModal({ contacts, groups = [], user, onClose, onSave
     setSaving(true);
     try {
       const payload = {
-        ...form,
-        contactId: form.contactId || null,
+        name: form.name, email: form.email, role: form.role, contactId: form.contactId || null,
         groupId: form.role === "manager" ? (form.groupId || null) : null,
       };
       if (user) await api.put(`/users/${user.id}`, payload);
@@ -48,10 +46,7 @@ export default function UserModal({ contacts, groups = [], user, onClose, onSave
             onChange={(e) => setForm({ ...form, email: e.target.value })} />
         </Field>
 
-        <Field label={user ? "New Password (leave blank to keep current)" : "Password"}>
-          <input type="password" required={!user} value={form.password} className={inputCls}
-            onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        </Field>
+        {!user && <p className="text-xs text-gray-500 bg-brand-50 rounded-xl p-3 mb-4">An invitation email will be sent so the new user can securely set their own password or PIN.</p>}
 
         <Field label="Role">
           <select value={form.role} className={inputCls}

@@ -10,6 +10,7 @@ import UserDashboard from "./pages/UserDashboard.jsx";
 import Logs from "./pages/Logs.jsx";
 import Settings from "./pages/Settings.jsx";
 import MainAdminPage from "./pages/MainAdminPage.jsx";
+import FirstMainAdminSetup from "./pages/FirstMainAdminSetup.jsx";
 
 function Protected({ roles, children }) {
   const { user } = useAuth();
@@ -30,6 +31,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/first-setup" element={<FirstMainAdminSetup />} />
       <Route path="/set-password" element={<SetPassword />} />
       <Route path="/set-pin" element={<SetPin />} />
       <Route path="/" element={<Home />} />

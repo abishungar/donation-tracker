@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
     const stored = localStorage.getItem("user");
     return stored ? JSON.parse(stored) : null;
   });
+  const [loginNotice, setLoginNotice] = useState(() => { const raw=localStorage.getItem("loginNotice"); localStorage.removeItem("loginNotice"); return raw ? JSON.parse(raw) : null; });
 
   async function login(email, credential) {
     const payload = { email, credential };
@@ -15,17 +16,19 @@ export function AuthProvider({ children }) {
     localStorage.setItem("token", res.data.token);
     localStorage.setItem("user", JSON.stringify(res.data.user));
     setUser(res.data.user);
+    setLoginNotice(res.data.loginNotice || null);
     return res.data.user;
   }
 
   function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    setUser(null);
+    localStorage.removeItem("loginNotice");
+    setUser(null); setLoginNotice(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, loginNotice, clearLoginNotice:()=>setLoginNotice(null) }}>
       {children}
     </AuthContext.Provider>
   );

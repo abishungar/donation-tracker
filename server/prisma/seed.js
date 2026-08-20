@@ -4,20 +4,7 @@ const bcrypt = require("bcryptjs");
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@example.com";
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || "ChangeMe123!";
-
-  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
-  if (!existingAdmin) {
-    const hash = await bcrypt.hash(adminPassword, 10);
-    await prisma.user.create({
-      data: { email: adminEmail, password: hash, role: "admin", isMainAdmin: true, passwordSet: true },
-    });
-    console.log(`Created admin user: ${adminEmail} / ${adminPassword}`);
-  } else {
-    await prisma.user.update({ where: { id: existingAdmin.id }, data: { isMainAdmin: true } });
-    console.log("Admin user already exists; marked as Main Admin.");
-  }
+  // Intentionally do not create a default admin. A new installation uses the secure first-run setup screen.
 
   const groupCount = await prisma.group.count();
   if (groupCount === 0) {
