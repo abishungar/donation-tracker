@@ -57,7 +57,12 @@ router.post("/login", async (req, res) => {
   );
 
   await prisma.log.create({ data: { userId: user.id, userEmail: user.email, action: "LOGIN" } });
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId, isMainAdmin: user.isMainAdmin } });
+  const nRows = await prisma.appSetting.findMany({ where: { key: { in: ["login_notice_enabled","login_notice_audience","login_notice_title","login_notice_body"] } } });
+  const n = Object.fromEntries(nRows.map(x => [x.key, x.value]));
+  const audience = String(n.login_notice_audience || "all").toLowerCase();
+  const show = n.login_notice_enabled === "true" && (audience === "all" || audience === user.role || (audience === "admins" && user.role === "admin") || (audience === "managers" && user.role === "manager"));
+  const loginNotice = show ? { title: n.login_notice_title || "Notice", body: n.login_notice_body || "" } : null;
+  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId, isMainAdmin: user.isMainAdmin }, loginNotice });
 });
 
 router.get("/me", authenticate, async (req, res) => {

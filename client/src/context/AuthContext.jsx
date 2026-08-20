@@ -14,6 +14,7 @@ export function AuthProvider({ children }) {
     const res = await api.post("/auth/login", payload);
     localStorage.setItem("token", res.data.token);
     localStorage.setItem("user", JSON.stringify(res.data.user));
+    if (res.data.loginNotice) sessionStorage.setItem("loginNotice", JSON.stringify(res.data.loginNotice));
     setUser(res.data.user);
     return res.data.user;
   }

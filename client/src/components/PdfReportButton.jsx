@@ -8,13 +8,12 @@ export default function PdfReportButton({ url, label = "PDF Report", className =
     e?.stopPropagation();
     if (loading) return;
     setLoading(true);
+    const win = window.open("about:blank", "_blank");
     try {
       const res = await api.get(url, { responseType: "blob" });
       const blobUrl = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
-      const win = window.open(blobUrl, "_blank", "noopener,noreferrer");
-      if (!win) {
-        const a = document.createElement("a"); a.href = blobUrl; a.download = "donation-report.pdf"; a.click();
-      }
+      if (win) win.location.href = blobUrl;
+      else window.open(blobUrl, "_blank");
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     } catch (err) {
       const text = await err.response?.data?.text?.().catch(() => null);

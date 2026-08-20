@@ -5,6 +5,19 @@ const PDFDocument = require("pdfkit");
 
 const router = express.Router();
 router.use(authenticate);
+async function getBrandName() {
+  const row = await prisma.appSetting.findUnique({ where: { key: "app_name" } });
+  return String(row?.value || process.env.APP_NAME || "Donation Tracker").trim();
+}
+
+function reportHeader(doc, brand, title, subtitle) {
+  doc.rect(0, 0, 612, 82).fill("#111827");
+  doc.fillColor("#ffffff").fontSize(19).font("Helvetica-Bold").text(brand, 40, 24);
+  doc.font("Helvetica").fontSize(10).fillColor("#cbd5e1").text(title, 40, 51);
+  doc.fillColor("#111827").moveDown(3);
+  if (subtitle) doc.fontSize(10).fillColor("#6b7280").text(subtitle);
+}
+
 
 // Group totals - visible to everyone logged in, but a plain "user" only
 // sees the total for their own group (not the full breakdown of contacts).
@@ -136,8 +149,8 @@ router.get("/groups/:id/pdf", async (req, res) => {
   res.setHeader("Content-Disposition", `inline; filename="group-${id}-${month || "all"}.pdf"`);
   const doc = new PDFDocument({ margin: 40 });
   doc.pipe(res);
-  doc.fontSize(20).fillColor("#111827").text(`${g.name} Donation Report`);
-  doc.moveDown(0.3).fontSize(10).fillColor("#6b7280").text(month ? `Month: ${month}` : "All donations");
+  const brand = await getBrandName();
+  reportHeader(doc, brand, `${g.name} Donation Report`, month ? `Month: ${month}` : "All donations");
   doc.moveDown(0.5).fontSize(13).fillColor("#111827").text(`Total raised: $${total.toFixed(2)}`);
   doc.moveDown();
   ds.forEach((d, i) => {
@@ -169,8 +182,8 @@ router.get("/contacts/:id/pdf", async (req, res) => {
   res.setHeader("Content-Disposition", `inline; filename="contact-${id}-donations.pdf"`);
   const doc = new PDFDocument({ margin: 40 });
   doc.pipe(res);
-  doc.fontSize(20).fillColor("#111827").text(`${c.firstName} ${c.lastName} - Donation Report`);
-  doc.moveDown(0.5).fontSize(13).text(`Total donated: $${total.toFixed(2)}`);
+  const brand = await getBrandName();
+  reportHeader(doc, brand, `${c.firstName} ${c.lastName} - Donation Report`, `Total donated: $${total.toFixed(2)}`);
   doc.moveDown();
   ds.forEach((d, i) => {
     if (i && i % 28 === 0) doc.addPage();
@@ -199,8 +212,8 @@ router.get("/contacts/pdf", async (req, res) => {
   res.setHeader("Content-Disposition", `inline; filename="all-contact-donations.pdf"`);
   const doc = new PDFDocument({ margin: 40 });
   doc.pipe(res);
-  doc.fontSize(20).fillColor("#111827").text("All Contact Donation Report");
-  doc.moveDown(0.4).fontSize(11).fillColor("#6b7280").text(req.user.role === "manager" ? "Manager report - managed groups only" : "All groups");
+  const brand = await getBrandName();
+  reportHeader(doc, brand, "All Contact Donation Report", req.user.role === "manager" ? "Manager report - managed groups only" : "All groups");
   doc.moveDown(0.4).fontSize(13).fillColor("#111827").text(`Total raised: $${total.toFixed(2)}  |  Donations: ${ds.length}  |  Contacts: ${grouped.size}`);
   doc.moveDown();
   for (const item of grouped.values()) {
