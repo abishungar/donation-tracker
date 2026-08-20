@@ -28,7 +28,7 @@ router.put("/settings", main, async (req, res) => {
   const allowed = [
     "email_mode",
     "smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from",
-    "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry",
+    "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry", "google_form_default_name", "google_form_default_from",
   ];
   for (const key of allowed) {
     const value = req.body?.[key];
