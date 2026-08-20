@@ -75,8 +75,12 @@ router.put("/:id", authorize("admin"), async (req, res) => {
   }
 });
 
-// Delete group (admin only)
+// Delete group (Main Admin only)
 router.delete("/:id", authorize("admin"), async (req, res) => {
+  // Deleting a group is a destructive system-level action. Only Main Admin may do it.
+  if (!req.user.isMainAdmin) {
+    return res.status(403).json({ error: "Only Main Admin can delete groups" });
+  }
   const id = Number(req.params.id);
   try {
     await prisma.group.delete({ where: { id } });

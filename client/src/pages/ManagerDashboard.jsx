@@ -11,6 +11,7 @@ export default function ManagerDashboard() {
   const [groups, setGroups] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [donations, setDonations] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null);
 
@@ -20,6 +21,7 @@ export default function ManagerDashboard() {
     api.get("/groups").then((res) => setGroups(res.data)).catch(() => setError("Could not load group."));
     api.get("/contacts").then((res) => setContacts(res.data)).catch(() => {});
     api.get("/donations").then((res) => setDonations(res.data)).catch(() => {});
+    api.get("/campaigns").then((res) => setCampaigns(res.data)).catch(() => {});
   }
   useEffect(loadAll, []);
 
@@ -151,18 +153,19 @@ export default function ManagerDashboard() {
         <DonationModal
           contact={modal.data && modal.data.firstName ? modal.data : undefined}
           contacts={contacts}
+          campaigns={campaigns}
           onClose={closeModal}
           onSaved={onSaved}
         />
       )}
       {modal?.type === "editDonation" && (
-        <DonationModal donation={modal.data} onClose={closeModal} onSaved={onSaved} />
+        <DonationModal donation={modal.data} campaigns={campaigns} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "contactDetail" && (
         <ContactDetailModal contactId={modal.data.id} onClose={closeModal} />
       )}
       {modal?.type === "bulkDonation" && (
-        <BulkDonationEntry contacts={contacts} onClose={closeModal} onAnySaved={loadAll} />
+        <BulkDonationEntry contacts={contacts} campaigns={campaigns} onClose={closeModal} onAnySaved={loadAll} />
       )}
     </Layout>
   );

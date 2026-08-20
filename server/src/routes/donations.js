@@ -24,7 +24,7 @@ router.get("/", async (req, res) => {
   }
   const donations = await prisma.donation.findMany({
     where,
-    include: { contact: true, group: true },
+    include: { contact: true, group: true, campaign: true },
     orderBy: { date: "desc" },
   });
   res.json(donations);
@@ -32,18 +32,27 @@ router.get("/", async (req, res) => {
 
 // Create donation (admin or manager for their own group's contacts)
 router.post("/", authorize("admin", "manager"), async (req, res) => {
-  const { amount, contactId, groupId, type } = req.body;
+  const { amount, contactId, groupId, type, campaignId } = req.body;
   if (!amount || !contactId || !groupId || !type) {
     return res.status(400).json({ error: "amount, contactId, groupId, and type are required" });
   }
   if (req.user.role === "manager" && !(await managerOwnsGroup(req.user.id, groupId))) {
     return res.status(403).json({ error: "You can only add donations for your own group" });
   }
+  const contact = await prisma.contact.findUnique({ where: { id: Number(contactId) } });
+  if (!contact || Number(contact.groupId) !== Number(groupId)) {
+    return res.status(400).json({ error: "This member does not belong to the selected group" });
+  }
+  if (campaignId) {
+    const campaign = await prisma.campaign.findUnique({ where: { id: Number(campaignId) } });
+    if (!campaign || !campaign.active) return res.status(400).json({ error: "Selected campaign is not active" });
+  }
   const donation = await prisma.donation.create({
     data: {
       amount: parseFloat(amount),
       contactId: Number(contactId),
       groupId: Number(groupId),
+      campaignId: campaignId ? Number(campaignId) : null,
       date: new Date(), // system date at the moment the donation is entered
       type,
       createdById: req.user.id,
@@ -61,13 +70,14 @@ router.put("/:id", authorize("admin", "manager"), async (req, res) => {
   if (req.user.role === "manager" && !(await managerOwnsGroup(req.user.id, existing.groupId))) {
     return res.status(403).json({ error: "You can only edit donations for your own group" });
   }
-  const { amount, date, type } = req.body;
+  const { amount, date, type, campaignId } = req.body;
   const donation = await prisma.donation.update({
     where: { id },
     data: {
       ...(amount !== undefined && { amount: parseFloat(amount) }),
       ...(date !== undefined && { date: new Date(date) }),
       ...(type !== undefined && { type }),
+      ...(campaignId !== undefined && { campaignId: campaignId ? Number(campaignId) : null }),
     },
   });
   await writeLog(req, "UPDATE_DONATION", { id });
@@ -98,7 +108,7 @@ router.post("/bulk", authorize("admin", "manager"), async (req, res) => {
 
   const results = [];
   for (const row of rows) {
-    const { contactId, amount, type } = row;
+    const { contactId, amount, type, campaignId } = row;
     if (!contactId || !amount || !type) {
       results.push({ contactId, error: "amount, contactId, and type are required" });
       continue;
@@ -117,6 +127,7 @@ router.post("/bulk", authorize("admin", "manager"), async (req, res) => {
         amount: parseFloat(amount),
         contactId: contact.id,
         groupId: contact.groupId,
+        campaignId: campaignId ? Number(campaignId) : null,
         date: new Date(),
         type,
         createdById: req.user.id,

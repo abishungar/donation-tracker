@@ -52,6 +52,15 @@ model Group {
   createdAt DateTime   @default(now())
 }
 
+model Campaign {
+  id          Int        @id @default(autoincrement())
+  name        String
+  description String?
+  active      Boolean    @default(true)
+  donations   Donation[]
+  createdAt   DateTime   @default(now())
+}
+
 model Donation {
   id          Int      @id @default(autoincrement())
   amount      Float
@@ -59,6 +68,8 @@ model Donation {
   contact     Contact  @relation(fields: [contactId], references: [id])
   groupId     Int // the group the contact belonged to AT THE TIME of donation
   group       Group    @relation(fields: [groupId], references: [id])
+  campaignId  Int?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   date        DateTime
   type        String // e.g. "Cash", "Check", "Online", "In-Kind"
   createdById Int?

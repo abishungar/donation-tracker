@@ -7,20 +7,25 @@ import UserModal from "../components/UserModal.jsx";
 import ContactDetailModal from "../components/ContactDetailModal.jsx";
 import BulkDonationEntry from "../components/BulkDonationEntry.jsx";
 import Analytics from "../components/Analytics.jsx";
+import CampaignModal from "../components/CampaignModal.jsx";
+import DonationCalendar from "../components/DonationCalendar.jsx";
 import ConfirmDelete from "../components/ConfirmDelete.jsx";
 import api from "../api";
+import { useAuth } from "../context/AuthContext.jsx";
 import {
   UserPlus, Users2, HeartHandshake, Pencil, Trash2, ShieldCheck, Rows3,
 } from "lucide-react";
 
-const TABS = ["Overview", "Analytics", "Contacts", "Groups", "Donations", "Users"];
+const TABS = ["Overview", "Analytics", "Calendar", "Contacts", "Groups", "Campaigns", "Donations", "Users"];
 
 export default function AdminDashboard() {
+  const { user } = useAuth();
   const [tab, setTab] = useState("Overview");
   const [groups, setGroups] = useState([]);
   const [users, setUsers] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [donations, setDonations] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [error, setError] = useState("");
   const [contactSearch, setContactSearch] = useState("");
   const [contactSort, setContactSort] = useState("first");
@@ -33,6 +38,7 @@ export default function AdminDashboard() {
     api.get("/users").then((r) => setUsers(r.data)).catch(() => {});
     api.get("/contacts").then((r) => setContacts(r.data)).catch(() => {});
     api.get("/donations").then((r) => setDonations(r.data)).catch(() => {});
+    api.get("/campaigns").then((r) => setCampaigns(r.data)).catch(() => {});
   }
   useEffect(loadAll, []);
 
@@ -47,6 +53,8 @@ export default function AdminDashboard() {
   async function deleteContact(id) { try { await api.delete(`/contacts/${id}`); setDeleteTarget(null); loadAll(); } catch (err) { setError(err.response?.data?.error || "Could not delete contact"); } }
 
   async function deleteUser(id) { try { await api.delete(`/users/${id}`); setDeleteTarget(null); loadAll(); } catch (err) { setError(err.response?.data?.error || "Could not delete user"); } }
+
+  async function deleteGroup(id) { try { await api.delete(`/groups/${id}`); setDeleteTarget(null); loadAll(); } catch (err) { setError(err.response?.data?.error || "Could not delete group"); } }
 
   const contactsByGroup = useMemo(() => {
     const groupsMap = new Map();
@@ -107,6 +115,8 @@ export default function AdminDashboard() {
 
       {tab === "Analytics" && <Analytics />}
 
+      {tab === "Calendar" && <DonationCalendar donations={donations} />}
+
       {tab === "Contacts" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
@@ -122,12 +132,38 @@ export default function AdminDashboard() {
 
       {tab === "Groups" && (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {groups.map(g=><button key={g.id} onClick={async()=>{try{const r=await api.get(`/groups/${g.id}`);setModal({type:"groupDetail",data:r.data})}catch{}}} className="text-left bg-white rounded-2xl border shadow-sm p-5 hover:border-brand-300 hover:shadow transition">
-            <div className="flex justify-between gap-3"><div><h3 className="font-semibold text-gray-800">{g.name}</h3><p className="text-xs text-gray-400 mt-1">{g._count?.contacts||0} contacts · {g.manager?.name||g.manager?.email||"No owner assigned"}</p></div><Pencil size={16} className="text-gray-300"/></div>
+          {groups.map(g=><div key={g.id} className="text-left bg-white rounded-2xl border shadow-sm p-5 hover:border-brand-300 hover:shadow transition">
+            <button onClick={async()=>{try{const r=await api.get(`/groups/${g.id}`);setModal({type:"groupDetail",data:r.data})}catch{}}} className="w-full text-left">
+              <div className="flex justify-between gap-3"><div><h3 className="font-semibold text-gray-800">{g.name}</h3><p className="text-xs text-gray-400 mt-1">{g._count?.contacts||0} contacts · {g.manager?.name||g.manager?.email||"No owner assigned"}</p></div><Pencil size={16} className="text-gray-300"/></div>
+            </button>
             <div className="mt-5"><p className="text-xs uppercase tracking-wide text-gray-400">Total raised</p><p className="text-2xl font-bold text-brand-700">${Number(g.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p><p className="text-xs text-gray-400 mt-1">${Number(g.monthRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})} this month</p></div>
-            <p className="mt-4 text-sm text-brand-600 font-medium">View contacts & donations →</p>
-          </button>)}
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-sm text-brand-600 font-medium">View contacts & donations →</p>
+              {user?.isMainAdmin && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: "group", id: g.id, name: g.name }); }}
+                  className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-medium"
+                >
+                  <Trash2 size={14} /> Delete Group
+                </button>
+              )}
+            </div>
+          </div>)}
           {groups.length===0&&<p className="text-gray-400">No groups yet.</p>}
+        </div>
+      )}
+
+      {tab === "Campaigns" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-5 py-4 bg-gray-50 border-b flex items-center justify-between">
+            <div><h3 className="font-semibold text-gray-800">Campaigns</h3><p className="text-xs text-gray-400 mt-1">Create campaigns and choose them when recording donations.</p></div>
+            <button onClick={() => setModal({type:"campaign"})} className="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold">+ Add Campaign</button>
+          </div>
+          <div className="divide-y">
+            {campaigns.map(c => <div key={c.id} className="px-5 py-4 flex items-center justify-between gap-3"><div><p className="font-medium text-gray-800">{c.name}</p><p className="text-xs text-gray-400">{c.description || "No description"} · {c._count?.donations || 0} donations</p></div><div className="flex items-center gap-3"><span className={`text-xs rounded-full px-2 py-1 ${c.active?"bg-green-50 text-green-700":"bg-gray-100 text-gray-500"}`}>{c.active?"Active":"Inactive"}</span><button onClick={()=>setModal({type:"campaign",data:c})} className="text-gray-400 hover:text-brand-600"><Pencil size={15}/></button></div></div>)}
+            {!campaigns.length && <p className="px-5 py-6 text-sm text-gray-400">No campaigns yet.</p>}
+          </div>
         </div>
       )}
 
@@ -196,10 +232,13 @@ export default function AdminDashboard() {
         <GroupModal group={modal.data} users={users} contacts={contacts} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "donation" && (
-        <DonationModal contact={modal.data && modal.data.firstName ? modal.data : undefined} contacts={modal.groupContacts || contacts} onClose={closeModal} onSaved={onSaved} />
+        <DonationModal contact={modal.data && modal.data.firstName ? modal.data : undefined} contacts={modal.groupContacts || contacts} campaigns={campaigns} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "editDonation" && (
-        <DonationModal donation={modal.data} onClose={closeModal} onSaved={onSaved} />
+        <DonationModal donation={modal.data} campaigns={campaigns} onClose={closeModal} onSaved={onSaved} />
+      )}
+      {modal?.type === "campaign" && (
+        <CampaignModal campaign={modal.data} onClose={closeModal} onSaved={onSaved} />
       )}
       {modal?.type === "user" && (
         <UserModal contacts={contacts} groups={groups} user={modal.data} onClose={closeModal} onSaved={onSaved} />
@@ -215,10 +254,10 @@ export default function AdminDashboard() {
           onContact={(contact) => setModal({ type: "contactDetail", data: contact })}
         />
       )}
-      {deleteTarget && <ConfirmDelete title={`Delete ${deleteTarget.type}?`} message={`Are you sure you want to permanently delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.type==="contact" ? deleteContact(deleteTarget.id) : deleteUser(deleteTarget.id)} />}
+      {deleteTarget && <ConfirmDelete title={`Delete ${deleteTarget.type}?`} message={`Are you sure you want to permanently delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.type==="contact" ? deleteContact(deleteTarget.id) : deleteTarget.type==="group" ? deleteGroup(deleteTarget.id) : deleteUser(deleteTarget.id)} />}
 
       {modal?.type === "bulkDonation" && (
-        <BulkDonationEntry contacts={contacts} onClose={closeModal} onAnySaved={loadAll} />
+        <BulkDonationEntry contacts={contacts} campaigns={campaigns} onClose={closeModal} onAnySaved={loadAll} />
       )}
     </Layout>
   );

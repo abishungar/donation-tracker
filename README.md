@@ -164,3 +164,10 @@ donation-tracker/
 - Group totals include all-time and current-month totals; PDF reports are available from `/api/reports/groups/:id/pdf` with optional `?month=YYYY-MM`.
 - Bulk donation entry is scrollable, searchable, sortable, filterable by group, and remembers the default payment type in the browser.
 - Data import accepts rows plus a mapping object, allowing source columns to be mapped to this system.
+
+## Campaigns and Calendar
+- Admins can create and edit multiple campaigns from Admin Dashboard > Campaigns.
+- Donations can be assigned to an active campaign.
+- Group managers can record donations for members of their own group and select an active campaign.
+- Admins have a Calendar tab showing all donations by Gregorian date, with Hebrew calendar dates displayed for each day.
+- Existing donations remain valid with no campaign assigned.

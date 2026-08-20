@@ -13,11 +13,12 @@ import api from "../api";
 // The donation's groupId is always taken from the contact's CURRENT group at the
 // moment it's created, and never changes afterward — even if the contact is later
 // reassigned to a different group.
-export default function DonationModal({ donation, contact, contacts = [], onClose, onSaved }) {
+export default function DonationModal({ donation, contact, contacts = [], campaigns = [], onClose, onSaved }) {
   const isEdit = !!donation;
   const [contactId, setContactId] = useState(contact?.id || "");
   const [amount, setAmount] = useState(donation?.amount?.toString() || "");
   const [type, setType] = useState(donation?.type || "Online");
+  const [campaignId, setCampaignId] = useState(donation?.campaignId ? String(donation.campaignId) : "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -29,7 +30,7 @@ export default function DonationModal({ donation, contact, contacts = [], onClos
     setSaving(true);
     try {
       if (isEdit) {
-        await api.put(`/donations/${donation.id}`, { amount: parseFloat(amount), type });
+        await api.put(`/donations/${donation.id}`, { amount: parseFloat(amount), type, campaignId: campaignId ? Number(campaignId) : null });
       } else {
         if (!selectedContact) {
           setError("Please select a contact");
@@ -46,6 +47,7 @@ export default function DonationModal({ donation, contact, contacts = [], onClos
           groupId: selectedContact.groupId,
           amount: parseFloat(amount),
           type,
+          campaignId: campaignId ? Number(campaignId) : null,
         });
       }
       onSaved();
@@ -99,6 +101,12 @@ export default function DonationModal({ donation, contact, contacts = [], onClos
         )}
         <Field label="Amount">
           <MoneyInput required value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </Field>
+        <Field label="Campaign">
+          <select value={campaignId} className={inputCls} onChange={(e)=>setCampaignId(e.target.value)}>
+            <option value="">No campaign</option>
+            {campaigns.filter(c=>c.active || String(c.id)===String(donation?.campaignId||"" )).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
         </Field>
         <Field label="Type">
           <select value={type} className={inputCls} onChange={(e) => setType(e.target.value)}>

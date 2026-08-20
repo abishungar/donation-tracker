@@ -3,9 +3,9 @@ import Modal from "./Modal.jsx";
 import api from "../api";
 import {Search, DollarSign, Users, CheckCircle2, X} from "lucide-react";
 
-export default function BulkDonationEntry({contacts,onClose,onAnySaved}){
+export default function BulkDonationEntry({contacts,campaigns=[],onClose,onAnySaved}){
  const [search,setSearch]=useState(""); const [group,setGroup]=useState("");
- const [type,setType]=useState(localStorage.getItem("defaultPaymentType")||"Online");
+ const [type,setType]=useState(localStorage.getItem("defaultPaymentType")||"Online"); const [campaignId,setCampaignId]=useState("");
  const [amounts,setAmounts]=useState({}); const [saving,setSaving]=useState({});
  const groups=[...new Map(contacts.filter(c=>c.group).map(c=>[c.groupId,c.group.name])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
  const rows=useMemo(()=>contacts.filter(c=>!group||String(c.groupId)===group)
@@ -14,7 +14,7 @@ export default function BulkDonationEntry({contacts,onClose,onAnySaved}){
  const entered=Object.entries(amounts).filter(([,v])=>Number(v)>0);
  const total=entered.reduce((s,[,v])=>s+Number(v),0);
  function moneyValue(v){ const n=Number(String(v).replace(/[^0-9.]/g,"")); return Number.isFinite(n)&&n>0?n.toFixed(2):""; }
- async function save(c){const amount=Number(amounts[c.id]);if(!amount)return;setSaving(x=>({...x,[c.id]:true}));try{await api.post("/donations",{contactId:c.id,groupId:c.groupId,amount,type});setAmounts(x=>({...x,[c.id]:""}));onAnySaved?.()}finally{setSaving(x=>({...x,[c.id]:false}))}}
+ async function save(c){const amount=Number(amounts[c.id]);if(!amount)return;setSaving(x=>({...x,[c.id]:true}));try{await api.post("/donations",{contactId:c.id,groupId:c.groupId,amount,type,campaignId:campaignId?Number(campaignId):null});setAmounts(x=>({...x,[c.id]:""}));onAnySaved?.()}finally{setSaving(x=>({...x,[c.id]:false}))}}
  async function saveAll(){for(const [id,v] of entered){const c=contacts.find(x=>String(x.id)===String(id));if(c) await save(c)}}
  function setPayment(v){setType(v);localStorage.setItem("defaultPaymentType",v)}
  return <Modal title="Bulk Donations" onClose={onClose} wide>
@@ -30,6 +30,7 @@ export default function BulkDonationEntry({contacts,onClose,onAnySaved}){
       <label className="flex items-center gap-2 text-sm text-gray-600">Payment type
        <select value={type} onChange={e=>setPayment(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 bg-white font-medium text-gray-700"><option>Online</option><option>Cash</option><option>Check</option><option>In-Kind</option></select>
       </label>
+      <label className="flex items-center gap-2 text-sm text-gray-600">Campaign <select value={campaignId} onChange={e=>setCampaignId(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 bg-white font-medium text-gray-700"><option value="">No campaign</option>{campaigns.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
     </div>
    </div>
 
