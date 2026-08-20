@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const prisma = require("../db");
 const { authenticate, authorize } = require("../middleware/auth");
 const { writeLog } = require("../utils/log");
+const { sendAccountSetupLink } = require("../utils/accountLinks");
 
 const router = express.Router();
 router.use(authenticate, authorize("admin"));
@@ -45,8 +46,8 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   const { email, password, role, contactId, name, isMainAdmin, groupId } = req.body;
-  if (!email || !password || !role) {
-    return res.status(400).json({ error: "email, password, and role are required" });
+  if (!email || !role) {
+    return res.status(400).json({ error: "email and role are required" });
   }
   if (isMainAdmin && !req.user.isMainAdmin) {
     return res.status(403).json({ error: "Only Main Admin can assign Main Admin status" });
@@ -55,16 +56,17 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "role must be admin, manager, or user" });
   }
 
-  const hash = await bcrypt.hash(password, 10);
+  const temporaryHash = await bcrypt.hash(require("crypto").randomBytes(32).toString("hex"), 10);
   try {
     const user = await prisma.user.create({
       data: {
         email: email.toLowerCase().trim(),
-        password: hash,
+        password: temporaryHash,
         role,
         name: name || null,
         contactId: contactId ? Number(contactId) : null,
         isMainAdmin: !!isMainAdmin,
+        passwordSet: false,
       },
     });
 
@@ -72,8 +74,17 @@ router.post("/", async (req, res) => {
       await assignManagerToGroup(user.id, groupId, contactId);
     }
 
-    await writeLog(req, "CREATE_USER", { email: user.email, role: user.role, groupId: groupId || null });
-    res.status(201).json({ id: user.id, email: user.email, name: user.name, role: user.role });
+    try {
+      const kind = role === "user" ? "pin" : "password";
+      await sendAccountSetupLink(req, user, kind);
+    } catch (mailErr) {
+      console.error("Account invitation email failed:", mailErr);
+      // Keep the account, but clearly report that the invitation could not be delivered.
+      await writeLog(req, "CREATE_USER_INVITE_FAILED", { email: user.email, role: user.role, error: mailErr.message });
+      return res.status(201).json({ id: user.id, email: user.email, name: user.name, role: user.role, inviteSent: false, warning: `User created, but the invitation email could not be sent: ${mailErr.message}` });
+    }
+    await writeLog(req, "CREATE_USER", { email: user.email, role: user.role, groupId: groupId || null, inviteSent: true });
+    res.status(201).json({ id: user.id, email: user.email, name: user.name, role: user.role, inviteSent: true });
   } catch (err) {
     console.error(err);
     res.status(400).json({ error: err.message || "Could not create user (email may already be in use)" });

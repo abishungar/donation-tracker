@@ -53,7 +53,8 @@ export default function MainAdminPage() {
       <div className="flex items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-800">Main Admin</h1>
-          <p className="text-sm text-gray-500 mt-1">System-wide administration, Main Admin users, and email delivery.</p>
+          <p className="text-sm text-gray-500 mt-1">System-wide administration, Main Admin users, imports, and email delivery.</p>
+          <p className="text-xs font-medium text-brand-600 mt-2">Website version {settings.website_version || "1.0.0"}</p>
         </div>
         <ShieldCheck className="text-brand-600" size={30} />
       </div>
@@ -76,13 +77,30 @@ export default function MainAdminPage() {
                     <p className="font-medium text-gray-800">{user.name || user.email}</p>
                     <p className="text-xs text-gray-400">{user.email} · {user.role}{user.isMainAdmin ? " · Main Admin" : ""}</p>
                   </div>
-                  <button
-                    onClick={() => toggleMainAdmin(user)}
-                    disabled={savingUser === user.id}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${user.isMainAdmin ? "border text-red-600 hover:bg-red-50" : "bg-brand-600 text-white hover:bg-brand-700"}`}
-                  >
-                    {user.isMainAdmin ? <><UserX size={15} className="inline mr-1" />Remove Main Admin</> : <><UserCheck size={15} className="inline mr-1" />Set as Main Admin</>}
-                  </button>
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    <button
+                      onClick={() => toggleMainAdmin(user)}
+                      disabled={savingUser === user.id}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${user.isMainAdmin ? "border text-red-600 hover:bg-red-50" : "bg-brand-600 text-white hover:bg-brand-700"}`}
+                    >
+                      {user.isMainAdmin ? <><UserX size={15} className="inline mr-1" />Remove Main Admin</> : <><UserCheck size={15} className="inline mr-1" />Set as Main Admin</>}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={savingUser === user.id}
+                      onClick={async()=>{
+                        setError(""); setSavingUser(user.id);
+                        try {
+                          const r = await api.post(`/admin/users/${user.id}/password-link`);
+                          setToast(r.data?.message || "Setup link sent."); setTimeout(()=>setToast(""),3500);
+                        } catch(e) { setError(e.response?.data?.error || "Could not send setup link"); }
+                        finally { setSavingUser(null); }
+                      }}
+                      className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:border-brand-300 disabled:opacity-50"
+                    >
+                      Send {user.role === "user" ? "PIN" : "Password"} Link
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>}

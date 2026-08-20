@@ -135,6 +135,11 @@ router.post("/request-password-link", async (req,res)=>{
     const contact=await prisma.contact.findUnique({where:{email}});
     if (contact) user=await prisma.user.create({data:{email,password:await bcrypt.hash(crypto.randomBytes(24).toString("hex"),10),role:"user",contactId:contact.id,name:`${contact.firstName} ${contact.lastName}`.trim(),passwordSet:false}});
   }
+  // Password reset links for staff accounts are intentionally disabled here.
+  // Only Main Admin can send a password setup/reset link from Main Admin.
+  if (user && user.role !== "user") {
+    return res.json({success:true,message:"If the email belongs to an eligible contact account, a PIN setup link has been sent."});
+  }
   if (user) { try { await createAccessLink(req, user, "password"); } catch(e) { return res.status(503).json({error:`Email could not be sent: ${e.message}`}); } }
   res.json({success:true,message:"If the email exists, a password link has been sent."});
 });
