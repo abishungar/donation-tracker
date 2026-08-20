@@ -6,12 +6,14 @@ import ContactDetailModal from "../components/ContactDetailModal.jsx";
 import BulkDonationEntry from "../components/BulkDonationEntry.jsx";
 import api from "../api";
 import { HeartHandshake, Pencil, Trash2, Rows3 } from "lucide-react";
+import PdfReportButton from "../components/PdfReportButton.jsx";
 
 export default function ManagerDashboard() {
   const [groups, setGroups] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [donations, setDonations] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
+  const [myDonations, setMyDonations] = useState(null);
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null);
 
@@ -22,6 +24,7 @@ export default function ManagerDashboard() {
     api.get("/contacts").then((res) => setContacts(res.data)).catch(() => {});
     api.get("/donations").then((res) => setDonations(res.data)).catch(() => {});
     api.get("/campaigns").then((res) => setCampaigns(res.data)).catch(() => {});
+    api.get("/reports/my-total").then((res) => setMyDonations(res.data)).catch(() => setMyDonations({ totalRaised: 0, donations: [] }));
   }
   useEffect(loadAll, []);
 
@@ -55,6 +58,8 @@ export default function ManagerDashboard() {
             >
               <Rows3 size={15} /> Bulk Add Donations
             </button>
+            <PdfReportButton url={`/reports/groups/${myGroup.id}/pdf`} label="Group PDF" />
+            <PdfReportButton url="/reports/contacts/pdf" label="All Donations PDF" />
             <button
               onClick={() => setModal({ type: "donation" })}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white"
@@ -73,6 +78,26 @@ export default function ManagerDashboard() {
 
       {myGroup && (
         <>
+          {myDonations && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">My Recent Donations</p>
+                  <p className="text-xs text-gray-400">Your donations as the contact linked to this manager account.</p>
+                </div>
+                <p className="text-lg font-bold text-brand-700">${Number(myDonations.totalRaised || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="divide-y border rounded-xl overflow-hidden">
+                {(myDonations.donations || []).slice(0, 5).map(d => (
+                  <div key={d.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div><p className="text-sm text-gray-700">{new Date(d.date).toLocaleDateString()}</p><p className="text-xs text-gray-400">{d.type}{d.campaign?.name ? ` · ${d.campaign.name}` : ""}</p></div>
+                    <span className="text-sm font-semibold text-brand-700">${Number(d.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+                {(!myDonations.donations || myDonations.donations.length === 0) && <p className="px-4 py-4 text-sm text-gray-400">No donations recorded for your linked contact.</p>}
+              </div>
+            </div>
+          )}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 max-w-xs">
             <p className="text-sm text-gray-500">Total Raised</p>
             <p className="text-3xl font-bold text-brand-700">
@@ -101,6 +126,7 @@ export default function ManagerDashboard() {
                       <span className={`text-xs px-2 py-0.5 rounded-full ${c.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>
                         {c.active ? "Active" : "Inactive"}
                       </span>
+                      <PdfReportButton url={`/reports/contacts/${c.id}/pdf`} label="PDF" className="text-xs text-gray-600 hover:text-brand-600 whitespace-nowrap" />
                       <button
                         onClick={() => setModal({ type: "donation", data: c })}
                         className="text-xs text-brand-600 hover:underline whitespace-nowrap"

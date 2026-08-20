@@ -11,7 +11,9 @@ export default function Login() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [appName, setAppName] = useState("Donation Tracker");
   const { login } = useAuth();
+  React.useEffect(() => { api.get("/auth/config").then(r => setAppName(r.data?.appName || "Donation Tracker")).catch(() => {}); }, []);
   const nav = useNavigate();
   function clearMessages(){setMessage("");setError("");}
   async function submit(e){
@@ -32,7 +34,7 @@ export default function Login() {
       <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
         <div className="bg-gray-900 px-7 py-7 text-white">
           <div className="w-12 h-12 rounded-2xl bg-brand-500 grid place-items-center mb-4"><KeyRound size={23}/></div>
-          <h1 className="text-2xl font-bold">Donation Tracker</h1>
+          <h1 className="text-2xl font-bold">{appName}</h1>
           <p className="text-sm text-gray-300 mt-1">Sign in with your email and PIN or password</p>
         </div>
         {!setupMode ? <div className="p-7">

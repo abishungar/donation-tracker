@@ -26,6 +26,7 @@ router.get("/settings", main, async (req, res) => {
 
 router.put("/settings", main, async (req, res) => {
   const allowed = [
+    "app_name",
     "email_mode",
     "smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from",
     "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry", "email_system_name", "email_from_address",
@@ -49,12 +50,12 @@ router.post("/email/test", main, async (req, res) => {
     const cfg = await getEmailConfig();
     const mode = String(cfg.email_mode || "smtp").toLowerCase();
     if (mode === "google_form" || mode === "google-form" || mode === "form") {
-      const info = await sendMail(to, "Donation Tracker — Email Test", `<p>This is a test email submission from Donation Tracker.</p><p>If your Google Form automation is configured to send email, it should now send this message.</p>`, { name: cfg.email_system_name || "Donation Tracker", from: cfg.email_from_address || cfg.smtp_from || cfg.smtp_user || "" });
+      const info = await sendMail(to, `${cfg.app_name || cfg.email_system_name || "Donation Tracker"} — Email Test`, `<p>This is a test email submission from Donation Tracker.</p><p>If your Google Form automation is configured to send email, it should now send this message.</p>`, { name: cfg.app_name || cfg.email_system_name || "Donation Tracker", from: cfg.email_from_address || cfg.smtp_from || cfg.smtp_user || "" });
       await writeLog(req, "TEST_EMAIL_SENT", { to, mode: "google_form", messageId: info.messageId });
       return res.json({ success: true, message: `Google Form submission sent for ${to}.`, messageId: info.messageId });
     }
     const result = await verifySmtp();
-    const info = await sendMail(to, "Donation Tracker — Email Test", `<p>This is a test email from Donation Tracker.</p><p>SMTP connection and authentication succeeded.</p><p>Server: ${result.host}:${result.port}</p>`);
+    const info = await sendMail(to, `${cfg.app_name || cfg.email_system_name || "Donation Tracker"} — Email Test`, `<p>This is a test email from Donation Tracker.</p><p>SMTP connection and authentication succeeded.</p><p>Server: ${result.host}:${result.port}</p>`);
     await writeLog(req, "TEST_EMAIL_SENT", { to, mode: "smtp", messageId: info.messageId, host: result.host, port: result.port });
     res.json({ success: true, message: `Test email sent to ${to}.`, messageId: info.messageId });
   } catch (err) {

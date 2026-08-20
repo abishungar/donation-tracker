@@ -3,7 +3,7 @@ import Layout from "../components/Layout.jsx";
 import EmailSettingsModal from "../components/EmailSettingsModal.jsx";
 import ImportExportPanel from "../components/ImportExportPanel.jsx";
 import api from "../api";
-import { Mail, ShieldCheck, UserCog, UserCheck, UserX } from "lucide-react";
+import { Mail, ShieldCheck, UserCog, UserCheck, UserX, Palette } from "lucide-react";
 
 export default function MainAdminPage() {
   const [settings, setSettings] = useState({});
@@ -91,6 +91,17 @@ export default function MainAdminPage() {
           </div>
 
           <ImportExportPanel />
+
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div><h2 className="font-semibold text-gray-800">Website Branding</h2><p className="text-sm text-gray-500 mt-1">Set the name shown on the login page, header/sidebar, and outgoing emails.</p></div>
+              <Palette className="text-brand-600" size={22} />
+            </div>
+            <div className="mt-4 flex flex-col sm:flex-row gap-3">
+              <input id="app-brand-name" defaultValue={settings.app_name || settings.email_system_name || "Donation Tracker"} className="flex-1 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-200" placeholder="Your system name" />
+              <button onClick={async()=>{const value=document.getElementById("app-brand-name")?.value?.trim(); if(!value)return; try{await api.put("/admin/settings",{app_name:value,email_system_name:value}); setSettings(s=>({...s,app_name:value,email_system_name:value})); setMessage("Branding updated. Refresh the page to see it everywhere.");}catch(e){setError(e.response?.data?.error||"Could not save branding");}}} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-3 rounded-xl font-medium">Save Branding</button>
+            </div>
+          </div>
 
           <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
             <div className="flex items-start justify-between gap-4">

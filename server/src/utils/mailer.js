@@ -2,6 +2,7 @@ const nodemailer = require("nodemailer");
 const prisma = require("../db");
 
 const EMAIL_KEYS = [
+  "app_name",
   "email_mode",
   "smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from",
   "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry", "email_system_name", "email_from_address",
@@ -71,7 +72,7 @@ async function sendViaGoogleForm(to, subject, html, meta = {}, s) {
   if (!subject) throw new Error("Email subject is required.");
   if (!html) throw new Error("Email body is required.");
 
-  const systemName = String(meta.name || s.email_system_name || "Donation Tracker").trim();
+  const systemName = String(meta.name || s.app_name || s.email_system_name || "Donation Tracker").trim();
   const fromAddress = String(meta.from || s.email_from_address || s.smtp_from || s.smtp_user || "").trim();
   const params = new URLSearchParams();
   params.set(emailEntry, String(to || "").trim());

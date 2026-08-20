@@ -10,6 +10,7 @@ import Analytics from "../components/Analytics.jsx";
 import CampaignModal from "../components/CampaignModal.jsx";
 import DonationCalendar from "../components/DonationCalendar.jsx";
 import ConfirmDelete from "../components/ConfirmDelete.jsx";
+import PdfReportButton from "../components/PdfReportButton.jsx";
 import api from "../api";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
@@ -120,7 +121,10 @@ export default function AdminDashboard() {
       {tab === "Contacts" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-            <input value={contactSearch} onChange={e=>setContactSearch(e.target.value)} placeholder="Search by name, email, or phone..." className="border border-gray-200 bg-gray-50 hover:bg-white rounded-xl px-4 py-3 w-full sm:max-w-md focus:ring-2 focus:ring-brand-200 outline-none" />
+            <div className="flex-1 flex gap-2 items-center">
+              <input value={contactSearch} onChange={e=>setContactSearch(e.target.value)} placeholder="Search by name, email, or phone..." className="border border-gray-200 bg-gray-50 hover:bg-white rounded-xl px-4 py-3 w-full sm:max-w-md focus:ring-2 focus:ring-brand-200 outline-none" />
+              <PdfReportButton url="/reports/contacts/pdf" label="All Donations PDF" />
+            </div>
             <select value={contactSort} onChange={e=>setContactSort(e.target.value)} className="border border-gray-200 bg-gray-50 hover:bg-white rounded-xl px-4 py-2.5 font-medium text-gray-700 outline-none focus:ring-2 focus:ring-brand-200"><option value="first">First name</option><option value="last">Last name</option><option value="group">Group</option><option value="money">Most money given</option></select>
           </div>
           <div className="divide-y">{[...contacts].filter(c=>c.active!==false).filter(c=>`${c.firstName} ${c.lastName} ${c.email||""} ${c.phone||""}`.toLowerCase().includes(contactSearch.toLowerCase())).sort((a,b)=>contactSort==="money"?(b.totalDonated||0)-(a.totalDonated||0):contactSort==="group"?`${a.group?.name||"~~~~"} ${a.lastName||""} ${a.firstName||""}`.localeCompare(`${b.group?.name||"~~~~"} ${b.lastName||""} ${b.firstName||""}`):contactSort==="last"?`${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`):`${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)).map(c=><div key={c.id} onClick={()=>setModal({type:"contactDetail",data:c})} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-brand-50/60 cursor-pointer transition">
@@ -128,7 +132,7 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-2 shrink-0">
               <button title="Edit contact" onClick={e=>{e.stopPropagation();setModal({type:"contact",data:c})}} className="p-2 text-gray-400 hover:text-brand-600"><Pencil size={16}/></button>
               <button title="Deactivate contact" onClick={e=>{e.stopPropagation();setDeleteTarget({type:"contact",id:c.id,name:`${c.firstName} ${c.lastName}`})}} className="p-2 text-gray-400 hover:text-red-600"><Trash2 size={16}/></button>
-              <button onClick={e=>{e.stopPropagation();setModal({type:"donation",data:c})}} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl font-semibold whitespace-nowrap">+ Add Donation</button>
+              <PdfReportButton url={`/reports/contacts/${c.id}/pdf`} label="PDF" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium text-gray-700 hover:border-brand-300 hover:text-brand-700 whitespace-nowrap" /><button onClick={e=>{e.stopPropagation();setModal({type:"donation",data:c})}} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl font-semibold whitespace-nowrap">+ Add Donation</button>
             </div>
           </div>)}</div>
         </div>
@@ -337,6 +341,7 @@ function GroupDetailModal({ group, onClose, onAddDonation, onContact }) {
           </div>
 
           <div className="flex flex-wrap gap-2 mb-5">
+            <PdfReportButton url={`/reports/groups/${group.id}/pdf`} label="Group PDF" />
             <button
               onClick={() => onAddDonation(null)}
               className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold"

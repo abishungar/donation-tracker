@@ -57,6 +57,9 @@ router.post("/", authorize("admin"), async (req, res) => {
     if (ids.length) {
       await tx.contact.updateMany({ where: { id: { in: ids }, active: true }, data: { groupId: created.id } });
     }
+    if (created.managerId) {
+      await tx.user.update({ where: { id: created.managerId }, data: { contactId: created.managerContactId || null } });
+    }
     return created;
   });
   await writeLog(req, "CREATE_GROUP", { id: group.id, name, contactIds: ids });
@@ -80,6 +83,11 @@ router.put("/:id", authorize("admin"), async (req, res) => {
       });
       if (ids) {
         await tx.contact.updateMany({ where: { id: { in: ids }, active: true }, data: { groupId: id } });
+      }
+      if (managerId !== undefined || managerContactId !== undefined) {
+        if (updated.managerId) {
+          await tx.user.update({ where: { id: updated.managerId }, data: { contactId: updated.managerContactId || null } });
+        }
       }
       return updated;
     });

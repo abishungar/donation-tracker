@@ -10,6 +10,13 @@ const { sendMail, settings: getMailSettings } = require("../utils/mailer");
 
 const router = express.Router();
 
+// Public app configuration used by the login page and site chrome.
+router.get("/config", async (req, res) => {
+  const row = await prisma.appSetting.findUnique({ where: { key: "app_name" } });
+  const legacy = await prisma.appSetting.findUnique({ where: { key: "email_system_name" } });
+  res.json({ appName: String(row?.value || legacy?.value || process.env.APP_NAME || "Donation Tracker").trim() });
+});
+
 router.post("/login", async (req, res) => {
   const email = String(req.body?.email || "").toLowerCase().trim();
   const password = String(req.body?.password || "");
@@ -17,8 +24,18 @@ router.post("/login", async (req, res) => {
   const credential = String(req.body?.credential || "");
   if (!email) return res.status(400).json({ error: "Email is required" });
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  let user = await prisma.user.findUnique({ where: { email } });
   if (!user) return res.status(401).json({ error: "Invalid email or PIN/password" });
+
+  // If a manager was linked to a contact through the Group editor, use that
+  // link for the manager's personal donation history even if the older user
+  // record was not previously synced.
+  if (user.role === "manager" && !user.contactId) {
+    const managed = await prisma.group.findFirst({ where: { managerId: user.id, managerContactId: { not: null } }, select: { managerContactId: true } });
+    if (managed?.managerContactId) {
+      user = await prisma.user.update({ where: { id: user.id }, data: { contactId: managed.managerContactId } });
+    }
+  }
 
   let valid = false;
   const supplied = credential || pin || password;
@@ -77,7 +94,7 @@ async function createAccessLink(req, user, kind) {
   const base = String(process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
   const link = `${base}/${kind === "pin" ? "set-pin" : "set-password"}?token=${encodeURIComponent(token)}`;
   const mailSettings = await getMailSettings();
-  const systemName = String(mailSettings.email_system_name || process.env.APP_NAME || "Donation Tracker").trim();
+  const systemName = String(mailSettings.app_name || mailSettings.email_system_name || process.env.APP_NAME || "Donation Tracker").trim();
   const fromAddress = String(mailSettings.email_from_address || mailSettings.smtp_from || mailSettings.smtp_user || "").trim();
   const displayName = user.name ? String(user.name).replace(/[<>]/g, "") : "there";
   const isPin = kind === "pin";

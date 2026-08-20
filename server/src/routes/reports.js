@@ -34,6 +34,7 @@ router.get("/my-total", authenticate, async (req, res) => {
   if (!req.user.contactId) return res.json({ totalRaised: 0, donations: [] });
   const donations = await prisma.donation.findMany({
     where: { contactId: req.user.contactId },
+    include: { group: true, campaign: true },
     orderBy: { date: "desc" },
   });
   const totalRaised = donations.reduce((sum, d) => sum + d.amount, 0);
@@ -115,12 +116,104 @@ router.get("/groups/:id/detail", async(req,res)=>{
  const monthly={}; donations.forEach(d=>{const k=new Date(d.date).toISOString().slice(0,7);monthly[k]=(monthly[k]||0)+d.amount});
  res.json({group:g,totalRaised,monthly,donations});
 });
-router.get("/groups/:id/pdf", async(req,res)=>{
- const id=Number(req.params.id), month=req.query.month; const g=await prisma.group.findUnique({where:{id}}); if(!g)return res.status(404).end();
- let where={groupId:id}; if(month){const start=new Date(month+"-01T00:00:00"), end=new Date(start.getFullYear(),start.getMonth()+1,1);where.date={gte:start,lt:end};}
- const ds=await prisma.donation.findMany({where,include:{contact:true},orderBy:{date:"desc"}}); const total=ds.reduce((a,d)=>a+d.amount,0);
- res.setHeader("Content-Type","application/pdf");res.setHeader("Content-Disposition",`attachment; filename="group-${id}-${month||"all"}.pdf"`);
- const doc=new PDFDocument({margin:40});doc.pipe(res);doc.fontSize(20).text(`${g.name} Donation Report`);doc.moveDown().fontSize(11).text(month?`Month: ${month}`:"All donations");doc.text(`Total raised: $${total.toFixed(2)}`);doc.moveDown();ds.forEach(d=>doc.text(`${new Date(d.date).toLocaleDateString()}  |  ${d.contact.firstName} ${d.contact.lastName}  |  ${d.type}  |  $${d.amount.toFixed(2)}`));doc.end();
+router.get("/groups/:id/pdf", async (req, res) => {
+  const id = Number(req.params.id);
+  const month = req.query.month;
+  const g = await prisma.group.findUnique({ where: { id } });
+  if (!g) return res.status(404).json({ error: "Group not found" });
+  if (req.user.role === "manager" && g.managerId !== req.user.id) return res.status(403).json({ error: "Not authorized" });
+  if (!['admin','manager'].includes(req.user.role)) return res.status(403).json({ error: "Not authorized" });
+
+  let where = { groupId: id };
+  if (month) {
+    const start = new Date(month + "-01T00:00:00");
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    where.date = { gte: start, lt: end };
+  }
+  const ds = await prisma.donation.findMany({ where, include: { contact: true, campaign: true }, orderBy: { date: "desc" } });
+  const total = ds.reduce((a, d) => a + d.amount, 0);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="group-${id}-${month || "all"}.pdf"`);
+  const doc = new PDFDocument({ margin: 40 });
+  doc.pipe(res);
+  doc.fontSize(20).fillColor("#111827").text(`${g.name} Donation Report`);
+  doc.moveDown(0.3).fontSize(10).fillColor("#6b7280").text(month ? `Month: ${month}` : "All donations");
+  doc.moveDown(0.5).fontSize(13).fillColor("#111827").text(`Total raised: $${total.toFixed(2)}`);
+  doc.moveDown();
+  ds.forEach((d, i) => {
+    if (i && i % 28 === 0) doc.addPage();
+    doc.fontSize(10).fillColor("#111827").text(`${new Date(d.date).toLocaleDateString()}  |  ${d.contact.firstName} ${d.contact.lastName}  |  ${d.type}  |  $${d.amount.toFixed(2)}${d.campaign ? `  |  ${d.campaign.name}` : ""}`);
+  });
+  doc.end();
+});
+
+async function allowedContact(req, contactId) {
+  const c = await prisma.contact.findUnique({ where: { id: contactId }, select: { id: true, firstName: true, lastName: true, groupId: true } });
+  if (!c) return { error: "Contact not found" };
+  if (req.user.role === "admin") return { contact: c };
+  if (req.user.role === "manager") {
+    const g = c.groupId ? await prisma.group.findUnique({ where: { id: c.groupId }, select: { managerId: true } }) : null;
+    if (g?.managerId === req.user.id) return { contact: c };
+  }
+  return { error: "Not authorized" };
+}
+
+router.get("/contacts/:id/pdf", async (req, res) => {
+  const id = Number(req.params.id);
+  const allowed = await allowedContact(req, id);
+  if (allowed.error) return res.status(allowed.error === "Contact not found" ? 404 : 403).json({ error: allowed.error });
+  const c = allowed.contact;
+  const ds = await prisma.donation.findMany({ where: { contactId: id }, include: { group: true, campaign: true }, orderBy: { date: "desc" } });
+  const total = ds.reduce((a, d) => a + d.amount, 0);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="contact-${id}-donations.pdf"`);
+  const doc = new PDFDocument({ margin: 40 });
+  doc.pipe(res);
+  doc.fontSize(20).fillColor("#111827").text(`${c.firstName} ${c.lastName} - Donation Report`);
+  doc.moveDown(0.5).fontSize(13).text(`Total donated: $${total.toFixed(2)}`);
+  doc.moveDown();
+  ds.forEach((d, i) => {
+    if (i && i % 28 === 0) doc.addPage();
+    doc.fontSize(10).text(`${new Date(d.date).toLocaleDateString()}  |  ${d.group?.name || "No group"}  |  ${d.type}  |  $${d.amount.toFixed(2)}${d.campaign ? `  |  ${d.campaign.name}` : ""}`);
+  });
+  if (!ds.length) doc.fontSize(10).fillColor("#6b7280").text("No donations recorded.");
+  doc.end();
+});
+
+router.get("/contacts/pdf", async (req, res) => {
+  if (!['admin','manager'].includes(req.user.role)) return res.status(403).json({ error: "Not authorized" });
+  let where = {};
+  if (req.user.role === "manager") {
+    const groups = await prisma.group.findMany({ where: { managerId: req.user.id }, select: { id: true } });
+    where = { groupId: { in: groups.map(g => g.id) } };
+  }
+  const ds = await prisma.donation.findMany({ where, include: { contact: true, group: true, campaign: true }, orderBy: { date: "desc" } });
+  const total = ds.reduce((a, d) => a + d.amount, 0);
+  const grouped = new Map();
+  for (const d of ds) {
+    const key = d.contactId;
+    if (!grouped.has(key)) grouped.set(key, { name: `${d.contact.firstName} ${d.contact.lastName}`, total: 0, donations: [] });
+    const item = grouped.get(key); item.total += d.amount; item.donations.push(d);
+  }
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="all-contact-donations.pdf"`);
+  const doc = new PDFDocument({ margin: 40 });
+  doc.pipe(res);
+  doc.fontSize(20).fillColor("#111827").text("All Contact Donation Report");
+  doc.moveDown(0.4).fontSize(11).fillColor("#6b7280").text(req.user.role === "manager" ? "Manager report - managed groups only" : "All groups");
+  doc.moveDown(0.4).fontSize(13).fillColor("#111827").text(`Total raised: $${total.toFixed(2)}  |  Donations: ${ds.length}  |  Contacts: ${grouped.size}`);
+  doc.moveDown();
+  for (const item of grouped.values()) {
+    if (doc.y > 700) doc.addPage();
+    doc.fontSize(12).fillColor("#111827").text(`${item.name} — $${item.total.toFixed(2)}`);
+    item.donations.forEach(d => {
+      if (doc.y > 730) doc.addPage();
+      doc.fontSize(9).fillColor("#374151").text(`  ${new Date(d.date).toLocaleDateString()} | ${d.group?.name || "No group"} | ${d.type} | $${d.amount.toFixed(2)}${d.campaign ? ` | ${d.campaign.name}` : ""}`);
+    });
+    doc.moveDown(0.5);
+  }
+  if (!ds.length) doc.fontSize(10).fillColor("#6b7280").text("No donations recorded.");
+  doc.end();
 });
 
 module.exports = router;
