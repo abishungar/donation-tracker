@@ -12,9 +12,52 @@ const router = express.Router();
 
 // Public app configuration used by the login page and site chrome.
 router.get("/config", async (req, res) => {
-  const row = await prisma.appSetting.findUnique({ where: { key: "app_name" } });
-  const legacy = await prisma.appSetting.findUnique({ where: { key: "email_system_name" } });
-  res.json({ appName: String(row?.value || legacy?.value || process.env.APP_NAME || "Donation Tracker").trim() });
+  const [row, legacy, mainAdminCount] = await Promise.all([
+    prisma.appSetting.findUnique({ where: { key: "app_name" } }),
+    prisma.appSetting.findUnique({ where: { key: "email_system_name" } }),
+    prisma.user.count({ where: { isMainAdmin: true } }),
+  ]);
+  res.json({
+    appName: String(row?.value || legacy?.value || process.env.APP_NAME || "Donation Tracker").trim(),
+    setupRequired: mainAdminCount === 0,
+  });
+});
+
+// First-run bootstrap. This endpoint is intentionally public only while the
+// database has zero Main Admins. Once the first Main Admin exists it becomes
+// permanently unavailable unless all Main Admins are removed by an existing
+// Main Admin. A Postgres advisory lock prevents two simultaneous first-run
+// requests from creating two bootstrap accounts.
+router.post("/bootstrap-main-admin", async (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  const email = String(req.body?.email || "").toLowerCase().trim();
+  const password = String(req.body?.password || "");
+  if (!name) return res.status(400).json({ error: "Name is required" });
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: "A valid email is required" });
+  if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(91427361)");
+      const count = await tx.user.count({ where: { isMainAdmin: true } });
+      if (count > 0) throw Object.assign(new Error("First Main Admin has already been created. Please sign in."), { code: "SETUP_COMPLETE" });
+      const existing = await tx.user.findUnique({ where: { email } });
+      if (existing) throw Object.assign(new Error("An account with this email already exists."), { code: "EMAIL_EXISTS" });
+      const hash = await bcrypt.hash(password, 12);
+      const user = await tx.user.create({
+        data: { email, name, password: hash, passwordSet: true, role: "admin", isMainAdmin: true },
+        select: { id: true, email: true, name: true, role: true, contactId: true, isMainAdmin: true },
+      });
+      await tx.log.create({ data: { userId: user.id, userEmail: user.email, action: "CREATE_FIRST_MAIN_ADMIN", details: JSON.stringify({ bootstrap: true }) } });
+      return user;
+    });
+    res.status(201).json({ success: true, user: result, message: "First Main Admin created. You can now sign in." });
+  } catch (err) {
+    if (err.code === "SETUP_COMPLETE") return res.status(409).json({ error: err.message });
+    if (err.code === "EMAIL_EXISTS") return res.status(409).json({ error: err.message });
+    console.error("Bootstrap Main Admin failed:", err);
+    res.status(500).json({ error: "Could not create the first Main Admin" });
+  }
 });
 
 router.post("/login", async (req, res) => {
@@ -57,12 +100,7 @@ router.post("/login", async (req, res) => {
   );
 
   await prisma.log.create({ data: { userId: user.id, userEmail: user.email, action: "LOGIN" } });
-  const nRows = await prisma.appSetting.findMany({ where: { key: { in: ["login_notice_enabled","login_notice_audience","login_notice_title","login_notice_body"] } } });
-  const n = Object.fromEntries(nRows.map(x => [x.key, x.value]));
-  const audience = String(n.login_notice_audience || "all").toLowerCase();
-  const show = n.login_notice_enabled === "true" && (audience === "all" || audience === user.role || (audience === "admins" && user.role === "admin") || (audience === "managers" && user.role === "manager"));
-  const loginNotice = show ? { title: n.login_notice_title || "Notice", body: n.login_notice_body || "" } : null;
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId, isMainAdmin: user.isMainAdmin }, loginNotice });
+  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, contactId: user.contactId, isMainAdmin: user.isMainAdmin } });
 });
 
 router.get("/me", authenticate, async (req, res) => {
@@ -134,11 +172,6 @@ router.post("/request-password-link", async (req,res)=>{
   if (!user) {
     const contact=await prisma.contact.findUnique({where:{email}});
     if (contact) user=await prisma.user.create({data:{email,password:await bcrypt.hash(crypto.randomBytes(24).toString("hex"),10),role:"user",contactId:contact.id,name:`${contact.firstName} ${contact.lastName}`.trim(),passwordSet:false}});
-  }
-  // Password reset links for staff accounts are intentionally disabled here.
-  // Only Main Admin can send a password setup/reset link from Main Admin.
-  if (user && user.role !== "user") {
-    return res.json({success:true,message:"If the email belongs to an eligible contact account, a PIN setup link has been sent."});
   }
   if (user) { try { await createAccessLink(req, user, "password"); } catch(e) { return res.status(503).json({error:`Email could not be sent: ${e.message}`}); } }
   res.json({success:true,message:"If the email exists, a password link has been sent."});

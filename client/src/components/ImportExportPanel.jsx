@@ -41,24 +41,6 @@ export default function ImportExportPanel() {
 
   async function importContacts(file){if(!file)return;setBusy(true);setMessage("");setError("");try{const text=await file.text();let rows;if(file.name.toLowerCase().endsWith(".json")){const parsed=JSON.parse(text);rows=Array.isArray(parsed)?parsed:(parsed.contacts||[]).map(c=>({firstName:c.firstName,lastName:c.lastName,phone:c.phone||"",email:c.email||"",group:c.group?.name||"",active:c.active!==false}));}else rows=parseCsv(text);if(!rows.length)throw new Error("No importable contact rows were found.");const r=await api.post("/admin/import",{rows});setMessage(`Contact import complete. ${r.data?.created??0} contact(s) added.`);if(contactInputRef.current)contactInputRef.current.value="";}catch(e){setError(e.response?.data?.error||e.message||"Could not import contacts.");}finally{setBusy(false);}}
 
-  function downloadDonationSample() {
-    const sample = [{
-      "Contact ID": "123",
-      "Email": "donor@example.com",
-      "First name": "John",
-      "Last name": "Doe",
-      "Phone": "555-555-1234",
-      "Group": "Example Group",
-      "Amount": "100.00",
-      "Donation date": new Date().toISOString().slice(0, 10),
-      "Donation type": "Check"
-    }];
-    const ws = XLSX.utils.json_to_sheet(sample);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Donations");
-    XLSX.writeFile(wb, "donation-import-template.xlsx");
-  }
-
   async function readDonationSheet(file){if(!file)return;setBusy(true);setMessage("");setError("");try{let rows=[];const name=file.name.toLowerCase();if(name.endsWith(".xlsx")||name.endsWith(".xls")){const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:false});}else rows=parseCsv(await file.text());if(!rows.length)throw new Error("The sheet has no data rows.");const hs=Object.keys(rows[0]);setDonationRows(rows);setHeaders(hs);setMapping({contact:guess(hs,["contactid","contact","donorid","donor"]),email:guess(hs,["email","emailaddress"]),firstName:guess(hs,["firstname","first"]),lastName:guess(hs,["lastname","last"]),phone:guess(hs,["phone","phonenumber","mobile"]),group:guess(hs,["group","groupname"]),amount:guess(hs,["amount","donationamount","donation","total","gift"]),date:guess(hs,["date","donationdate","donatedate"]),type:guess(hs,["type","donationtype","paymenttype"]) });setFileName(file.name);setPreview(true);}catch(e){setError(e.message||"Could not read the sheet.");}finally{setBusy(false);}}
 
   async function importDonations(){setBusy(true);setMessage("");setError("");try{if(!mapping.amount)throw new Error("Map the Amount column before importing.");if(!mapping.contact&&!mapping.email&&!mapping.firstName)throw new Error("Map Contact, Email, or First name so donations can be matched to users.");const r=await api.post("/admin/import-donations",{rows:donationRows,mapping});const bad=r.data?.failed||[];setMessage(`Donation import complete. ${r.data?.created??0} donation(s) imported${bad.length?`; ${bad.length} row(s) need attention`:""}.`);if(bad.length)console.warn("Donation import failures",bad);setPreview(false);setDonationRows([]);if(donationInputRef.current)donationInputRef.current.value="";}catch(e){setError(e.response?.data?.error||e.message||"Could not import donations.");}finally{setBusy(false);}}
@@ -73,10 +55,7 @@ export default function ImportExportPanel() {
     </div>
 
     <div className="mt-6 border-t pt-6"><div className="flex items-center gap-2"><Database size={19} className="text-brand-600"/><h3 className="font-semibold text-gray-800">Import Donations From Sheet</h3></div><p className="text-sm text-gray-500 mt-1">Upload an Excel file (.xlsx/.xls) or CSV exported from Google Sheets, then map your columns before importing.</p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button disabled={busy} onClick={downloadDonationSample} className="border rounded-xl px-4 py-3 hover:border-brand-300 disabled:opacity-50"><Download size={17} className="inline mr-2 text-brand-600"/>Download Sample Sheet</button>
-        <button disabled={busy} onClick={()=>donationInputRef.current?.click()} className="border rounded-xl px-4 py-3 hover:border-brand-300 disabled:opacity-50"><Upload size={17} className="inline mr-2 text-brand-600"/>{fileName||"Choose Donation Sheet"}</button>
-      </div>
+      <button disabled={busy} onClick={()=>donationInputRef.current?.click()} className="mt-4 border rounded-xl px-4 py-3 hover:border-brand-300 disabled:opacity-50"><Upload size={17} className="inline mr-2 text-brand-600"/>{fileName||"Choose Donation Sheet"}</button>
       <input ref={donationInputRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="hidden" onChange={e=>readDonationSheet(e.target.files?.[0])}/>
     </div>
 

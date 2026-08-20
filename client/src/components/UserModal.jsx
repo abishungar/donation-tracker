@@ -7,6 +7,7 @@ export default function UserModal({ contacts, groups = [], user, onClose, onSave
   const [form, setForm] = useState({
     name: user?.name || "",
     email: user?.email || "",
+    password: "",
     role: user?.role || "user",
     contactId: user?.contactId || "",
     groupId: user?.managedGroups?.[0]?.id || "",
@@ -25,10 +26,7 @@ export default function UserModal({ contacts, groups = [], user, onClose, onSave
         groupId: form.role === "manager" ? (form.groupId || null) : null,
       };
       if (user) await api.put(`/users/${user.id}`, payload);
-      else {
-        const r = await api.post("/users", payload);
-        if (r.data?.warning) { setError(r.data.warning); return; }
-      }
+      else await api.post("/users", payload);
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Could not save user");
@@ -50,11 +48,10 @@ export default function UserModal({ contacts, groups = [], user, onClose, onSave
             onChange={(e) => setForm({ ...form, email: e.target.value })} />
         </Field>
 
-        {!user && (
-          <p className="text-xs text-gray-500 mb-4 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
-            The account will be created without a password. An invitation email will be sent so the user can securely set their password (or PIN for a donor/contact account).
-          </p>
-        )}
+        <Field label={user ? "New Password (leave blank to keep current)" : "Password"}>
+          <input type="password" required={!user} value={form.password} className={inputCls}
+            onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        </Field>
 
         <Field label="Role">
           <select value={form.role} className={inputCls}

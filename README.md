@@ -171,3 +171,10 @@ donation-tracker/
 - Group managers can record donations for members of their own group and select an active campaign.
 - Admins have a Calendar tab showing all donations by Gregorian date, with Hebrew calendar dates displayed for each day.
 - Existing donations remain valid with no campaign assigned.
+
+
+## First Main Admin setup
+
+A brand-new database with zero Main Admin accounts automatically shows **Create First Main Admin** on the login page. The setup creates an `admin` user with `isMainAdmin=true`. The server enforces that this endpoint only works while there are zero Main Admins and uses a PostgreSQL advisory transaction lock to prevent duplicate bootstrap accounts from simultaneous requests.
+
+After the first Main Admin exists, the bootstrap endpoint is disabled. Additional Main Admins can then be assigned from the Main Admin page.

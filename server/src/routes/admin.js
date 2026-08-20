@@ -4,7 +4,6 @@ const prisma = require("../db");
 const { authenticate, authorize } = require("../middleware/auth");
 const { writeLog } = require("../utils/log");
 const { sendMail, verifySmtp, getEmailConfig } = require("../utils/mailer");
-const { sendAccountSetupLink } = require("../utils/accountLinks");
 
 const router = express.Router();
 router.use(authenticate, authorize("admin"));
@@ -28,8 +27,6 @@ router.get("/settings", main, async (req, res) => {
 router.put("/settings", main, async (req, res) => {
   const allowed = [
     "app_name",
-    "website_version",
-    "login_notice_enabled", "login_notice_audience", "login_notice_title", "login_notice_body",
     "email_mode",
     "smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from",
     "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry", "email_system_name", "email_from_address",
@@ -66,21 +63,6 @@ router.post("/email/test", main, async (req, res) => {
     await writeLog(req, "TEST_EMAIL_FAILED", { to, error: err.message });
     res.status(502).json({ error: `Email test failed: ${err.message}` });
   }
-});
-
-router.post("/users/:id/password-link", main, async (req, res) => {
-  const id = Number(req.params.id);
-  const user = await prisma.user.findUnique({ where: { id } });
-  if (!user) return res.status(404).json({ error: "User not found" });
-  if (user.role === "user") {
-    try { await sendAccountSetupLink(req, user, "pin"); }
-    catch (e) { return res.status(502).json({ error: `PIN setup email could not be sent: ${e.message}` }); }
-  } else {
-    try { await sendAccountSetupLink(req, user, "password"); }
-    catch (e) { return res.status(502).json({ error: `Password setup email could not be sent: ${e.message}` }); }
-  }
-  await writeLog(req, "SEND_ACCOUNT_SETUP_LINK", { id, role: user.role, email: user.email });
-  res.json({ success: true, message: user.role === "user" ? "PIN setup email sent." : "Password setup email sent." });
 });
 
 router.post("/users/:id/reset-password", main, async (req, res) => {
