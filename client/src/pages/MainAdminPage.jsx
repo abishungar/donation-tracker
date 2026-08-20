@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Layout from "../components/Layout.jsx";
-import EmailSettingsModal from "../components/EmailSettingsModal.jsx";
+import EmailDeliveryPanel from "../components/EmailDeliveryPanel.jsx";
 import ImportExportPanel from "../components/ImportExportPanel.jsx";
 import api from "../api";
 import { Mail, ShieldCheck, UserCog, UserCheck, UserX } from "lucide-react";
@@ -8,7 +8,6 @@ import { Mail, ShieldCheck, UserCog, UserCheck, UserX } from "lucide-react";
 export default function MainAdminPage() {
   const [settings, setSettings] = useState({});
   const [users, setUsers] = useState([]);
-  const [emailOpen, setEmailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -59,15 +58,12 @@ export default function MainAdminPage() {
         <ImportExportPanel />
 
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
-          <div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold text-gray-800">Email Delivery</h2><p className="text-sm text-gray-500 mt-1">Choose how the application sends emails. Current method: <strong>{mode === "google_form" || mode === "form" ? "Google Form" : "SMTP"}</strong>.</p></div><Mail className="text-brand-600" size={22}/></div>
-          <div className="mt-5 grid sm:grid-cols-2 gap-3 text-sm">
-            <p><span className="text-gray-400">Method:</span> {mode === "google_form" || mode === "form" ? "Google Form submission" : "SMTP"}</p>
-            {mode === "google_form" || mode === "form" ? <p><span className="text-gray-400">Form:</span> {settings.google_form_id || "Not configured"}</p> : <><p><span className="text-gray-400">Server:</span> {settings.smtp_host}:{settings.smtp_port}</p><p><span className="text-gray-400">Username:</span> {settings.smtp_user || "Not configured"}</p><p><span className="text-gray-400">From:</span> {settings.smtp_from || settings.smtp_user || "Not configured"}</p></>}
-          </div>
+          <div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold text-gray-800">Email Delivery</h2><p className="text-sm text-gray-500 mt-1">Choose SMTP or Google Form delivery and configure it directly here.</p></div><Mail className="text-brand-600" size={22}/></div>
+          <EmailDeliveryPanel onChanged={load} />
+        </div>
           <button onClick={()=>setEmailOpen(true)} className="mt-5 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-xl font-medium"><Mail size={15} className="inline mr-2"/>Configure Email Delivery</button>
         </div>
       </div>}
-      {emailOpen && <EmailSettingsModal onClose={()=>{setEmailOpen(false);load();}}/>}
     </Layout>
   );
 }
