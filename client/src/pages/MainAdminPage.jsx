@@ -2,8 +2,10 @@ import React, { useEffect, useState } from "react";
 import Layout from "../components/Layout.jsx";
 import EmailSettingsModal from "../components/EmailSettingsModal.jsx";
 import api from "../api";
-import { Mail, ShieldCheck, Save } from "lucide-react";
+import { Mail, ShieldCheck, Save, Pencil, Trash2, Users2 } from "lucide-react";
 import ImportExportPanel from "../components/ImportExportPanel.jsx";
+import GroupModal from "../components/GroupModal.jsx";
+import ConfirmDelete from "../components/ConfirmDelete.jsx";
 
 export default function MainAdminPage() {
   const [settings, setSettings] = useState({});
@@ -12,6 +14,22 @@ export default function MainAdminPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [groups, setGroups] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [groupModal, setGroupModal] = useState(null);
+  const [deleteGroup, setDeleteGroup] = useState(null);
+
+  async function loadGroups() {
+    try {
+      const [g, u, c] = await Promise.all([api.get("/groups"), api.get("/users"), api.get("/contacts")]);
+      setGroups(g.data || []);
+      setUsers(u.data || []);
+      setContacts(c.data || []);
+    } catch (e) {
+      setError(e.response?.data?.error || "Could not load groups");
+    }
+  }
 
   async function load() {
     try {
@@ -22,7 +40,7 @@ export default function MainAdminPage() {
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadGroups(); }, []);
 
   async function saveProtection() {
     setSaving(true); setError(""); setMessage("");
@@ -38,6 +56,19 @@ export default function MainAdminPage() {
   }
 
   const locked = settings.lock_main_admin === "true";
+
+  async function confirmDeleteGroup() {
+    if (!deleteGroup) return;
+    setError("");
+    try {
+      await api.delete(`/groups/${deleteGroup.id}`);
+      setMessage(`Group "${deleteGroup.name}" deleted.`);
+      setDeleteGroup(null);
+      await loadGroups();
+    } catch (e) {
+      setError(e.response?.data?.error || "Could not delete group");
+    }
+  }
 
   return (
     <Layout>
@@ -86,6 +117,35 @@ export default function MainAdminPage() {
             </div>
           </div>
 
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-semibold text-gray-800">Group Management</h2>
+                <p className="text-sm text-gray-500 mt-1">Main Admin can rename groups and permanently delete groups.</p>
+              </div>
+              <Users2 className="text-brand-600" size={22} />
+            </div>
+            <div className="mt-5 divide-y border rounded-xl overflow-hidden">
+              {groups.map((g) => (
+                <div key={g.id} className="p-4 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-800 truncate">{g.name}</p>
+                    <p className="text-xs text-gray-400 mt-1">{g._count?.contacts || 0} contacts · {g.manager?.name || g.manager?.email || "No manager"} · ${Number(g.totalRaised || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} raised</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button type="button" onClick={() => setGroupModal(g)} className="inline-flex items-center gap-1.5 text-sm text-brand-600 hover:text-brand-800 font-medium">
+                      <Pencil size={15} /> Rename / Edit
+                    </button>
+                    <button type="button" onClick={() => setDeleteGroup({ id: g.id, name: g.name })} className="inline-flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 font-medium">
+                      <Trash2 size={15} /> Delete Group
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {!groups.length && <p className="p-4 text-sm text-gray-400">No groups yet.</p>}
+            </div>
+          </div>
+
           <ImportExportPanel />
 
           <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
@@ -110,6 +170,23 @@ export default function MainAdminPage() {
       )}
 
       {emailOpen && <EmailSettingsModal onClose={() => { setEmailOpen(false); load(); }} />}
+      {groupModal && (
+        <GroupModal
+          group={groupModal}
+          users={users}
+          contacts={contacts}
+          onClose={() => setGroupModal(null)}
+          onSaved={async () => { setGroupModal(null); await loadGroups(); setMessage("Group updated."); }}
+        />
+      )}
+      {deleteGroup && (
+        <ConfirmDelete
+          title="Delete Group?"
+          message={`This permanently deletes "${deleteGroup.name}". Any attached contacts or donations may prevent deletion. This action cannot be undone.`}
+          onCancel={() => setDeleteGroup(null)}
+          onConfirm={confirmDeleteGroup}
+        />
+      )}
     </Layout>
   );
 }

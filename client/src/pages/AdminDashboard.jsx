@@ -132,25 +132,43 @@ export default function AdminDashboard() {
 
       {tab === "Groups" && (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {groups.map(g=><div key={g.id} className="text-left bg-white rounded-2xl border shadow-sm p-5 hover:border-brand-300 hover:shadow transition">
-            <button onClick={async()=>{try{const r=await api.get(`/groups/${g.id}`);setModal({type:"groupDetail",data:r.data})}catch{}}} className="w-full text-left">
-              <div className="flex justify-between gap-3"><div><h3 className="font-semibold text-gray-800">{g.name}</h3><p className="text-xs text-gray-400 mt-1">{g._count?.contacts||0} contacts · {g.manager?.name||g.manager?.email||"No owner assigned"}</p></div><Pencil size={16} className="text-gray-300"/></div>
-            </button>
-            <div className="mt-5"><p className="text-xs uppercase tracking-wide text-gray-400">Total raised</p><p className="text-2xl font-bold text-brand-700">${Number(g.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p><p className="text-xs text-gray-400 mt-1">${Number(g.monthRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})} this month</p></div>
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-sm text-brand-600 font-medium">View contacts & donations →</p>
-              {user?.isMainAdmin && (
+          {groups.map((g) => (
+            <div key={g.id} className="text-left bg-white rounded-2xl border shadow-sm p-5 hover:border-brand-300 hover:shadow transition">
+              <button
+                onClick={async () => {
+                  try {
+                    const r = await api.get(`/groups/${g.id}`);
+                    setModal({ type: "groupDetail", data: r.data });
+                  } catch {}
+                }}
+                className="w-full text-left"
+              >
+                <div className="flex justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-800">{g.name}</h3>
+                    <p className="text-xs text-gray-400 mt-1">{g._count?.contacts || 0} contacts · {g.manager?.name || g.manager?.email || "No owner assigned"}</p>
+                  </div>
+                  <Pencil size={16} className="text-gray-300" />
+                </div>
+              </button>
+              <div className="mt-5">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Total raised</p>
+                <p className="text-2xl font-bold text-brand-700">${Number(g.totalRaised || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                <p className="text-xs text-gray-400 mt-1">${Number(g.monthRaised || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} this month</p>
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: "group", id: g.id, name: g.name }); }}
-                  className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-medium"
+                  onClick={() => setModal({ type: "group", data: g })}
+                  className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-800 font-medium"
                 >
-                  <Trash2 size={14} /> Delete Group
+                  <Pencil size={14} /> Rename / Edit
                 </button>
-              )}
+                <span className="text-xs text-brand-600 font-medium">View details →</span>
+              </div>
             </div>
-          </div>)}
-          {groups.length===0&&<p className="text-gray-400">No groups yet.</p>}
+          ))}
+          {groups.length === 0 && <p className="text-gray-400">No groups yet.</p>}
         </div>
       )}
 
