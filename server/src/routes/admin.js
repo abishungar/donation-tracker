@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const prisma = require("../db");
 const { authenticate, authorize } = require("../middleware/auth");
 const { writeLog } = require("../utils/log");
-const { sendMail, verifySmtp } = require("../utils/mailer");
+const { sendMail, verifySmtp, getEmailConfig } = require("../utils/mailer");
 
 const router = express.Router();
 router.use(authenticate, authorize("admin"));
@@ -18,23 +18,27 @@ async function main(req, res, next) {
 }
 
 router.get("/settings", main, async (req, res) => {
-  const rows = await prisma.appSetting.findMany();
-  const o = Object.fromEntries(rows.map((x) => [x.key, x.key === "smtp_app_password" ? "" : x.value]));
-  o.smtp_host = o.smtp_host || "smtp.gmail.com";
-  o.smtp_port = o.smtp_port || "465";
-  o.smtp_secure = o.smtp_secure ?? "true";
+  const o = await getEmailConfig();
+  // Main Admin controls are not exposed as an editable protection setting.
+  delete o.lock_main_admin;
   res.json(o);
 });
 
 router.put("/settings", main, async (req, res) => {
-  const allowed = ["smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from"];
+  const allowed = [
+    "email_mode",
+    "smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from",
+    "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry",
+  ];
   for (const key of allowed) {
     const value = req.body?.[key];
+    // Keep a previously saved App Password when the UI returns an empty password.
+    if (key === "smtp_app_password" && value === "") continue;
     if (value !== undefined && value !== "") {
       await prisma.appSetting.upsert({ where: { key }, update: { value: String(value) }, create: { key, value: String(value) } });
     }
   }
-  await writeLog(req, "UPDATE_MAIN_ADMIN_SETTINGS", { smtp: true });
+  await writeLog(req, "UPDATE_MAIN_ADMIN_SETTINGS", { emailMode: req.body?.email_mode || "smtp" });
   res.json({ success: true });
 });
 
@@ -42,28 +46,21 @@ router.post("/email/test", main, async (req, res) => {
   const to = String(req.body?.to || req.mainAdmin.email || "").trim();
   if (!to) return res.status(400).json({ error: "Enter a test recipient email." });
   try {
+    const cfg = await getEmailConfig();
+    const mode = String(cfg.email_mode || "smtp").toLowerCase();
+    if (mode === "google_form" || mode === "google-form" || mode === "form") {
+      const info = await sendMail(to, "Donation Tracker — Google Form Test", `<p>This is a test email submission from Donation Tracker.</p><p>If your Google Form automation is configured to send email, it should now send this message.</p>`, { name: req.mainAdmin.name || req.mainAdmin.email, from: cfg.smtp_from || cfg.smtp_user || "" });
+      await writeLog(req, "TEST_EMAIL_SENT", { to, mode: "google_form", messageId: info.messageId });
+      return res.json({ success: true, message: `Google Form submission sent for ${to}.`, messageId: info.messageId });
+    }
     const result = await verifySmtp();
     const info = await sendMail(to, "Donation Tracker — SMTP Test", `<p>This is a test email from Donation Tracker.</p><p>SMTP connection and authentication succeeded.</p><p>Server: ${result.host}:${result.port}</p>`);
-    await writeLog(req, "TEST_EMAIL_SENT", { to, messageId: info.messageId, host: result.host, port: result.port });
+    await writeLog(req, "TEST_EMAIL_SENT", { to, mode: "smtp", messageId: info.messageId, host: result.host, port: result.port });
     res.json({ success: true, message: `Test email sent to ${to}.`, messageId: info.messageId });
   } catch (err) {
-    console.error("SMTP test failed:", err);
+    console.error("Email test failed:", err);
     await writeLog(req, "TEST_EMAIL_FAILED", { to, error: err.message });
-    res.status(502).json({ error: `SMTP test failed: ${err.message}` });
-  }
-});
-
-router.put("/users/:id/main-admin", main, async (req, res) => {
-  const id = Number(req.params.id);
-  const isMainAdmin = Boolean(req.body?.isMainAdmin);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: "Invalid user id" });
-  if (id === req.user.id && !isMainAdmin) return res.status(400).json({ error: "You cannot remove your own Main Admin access from this screen." });
-  try {
-    const target = await prisma.user.update({ where: { id }, data: { isMainAdmin } });
-    await writeLog(req, isMainAdmin ? "GRANT_MAIN_ADMIN" : "REMOVE_MAIN_ADMIN", { userId: id });
-    res.json({ success: true, user: { id: target.id, email: target.email, name: target.name, isMainAdmin: target.isMainAdmin } });
-  } catch (err) {
-    res.status(404).json({ error: "User not found" });
+    res.status(502).json({ error: `Email test failed: ${err.message}` });
   }
 });
 

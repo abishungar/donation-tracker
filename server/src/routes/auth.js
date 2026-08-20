@@ -80,7 +80,7 @@ router.post("/request-password-link", async (req,res)=>{
     await prisma.passwordResetToken.create({data:{token,userId:user.id,expiresAt:new Date(Date.now()+60*60*1000)}});
     const base=process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
     const link=`${base}/set-password?token=${token}`;
-    try { await sendMail(user.email,"Set or reset your Donation Tracker password",`<p>Hello${user.name?` ${user.name}`:""},</p><p>Click the link below to set your password. It expires in 1 hour.</p><p><a href="${link}">${link}</a></p>`); } catch(e) { return res.status(503).json({error:"Email is not configured. Ask the Main Admin to configure Gmail SMTP."}); }
+    try { await sendMail(user.email,"Set or reset your Donation Tracker password",`<p>Hello${user.name?` ${user.name}`:""},</p><p>Click the link below to set your password. It expires in 1 hour.</p><p><a href="${link}">${link}</a></p>`, { name: user.name || user.email }); } catch(e) { return res.status(503).json({error:`Email could not be sent: ${e.message}`}); }
   }
   res.json({success:true,message:"If the email exists, a password link has been sent."});
 });

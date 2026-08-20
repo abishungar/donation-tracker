@@ -48,6 +48,9 @@ router.post("/", async (req, res) => {
   if (!email || !password || !role) {
     return res.status(400).json({ error: "email, password, and role are required" });
   }
+  if (isMainAdmin && !req.user.isMainAdmin) {
+    return res.status(403).json({ error: "Only Main Admin can assign Main Admin status" });
+  }
   if (!["admin", "manager", "user"].includes(role)) {
     return res.status(400).json({ error: "role must be admin, manager, or user" });
   }
@@ -61,7 +64,7 @@ router.post("/", async (req, res) => {
         role,
         name: name || null,
         contactId: contactId ? Number(contactId) : null,
-        isMainAdmin: false,
+        isMainAdmin: !!isMainAdmin,
       },
     });
 
@@ -86,7 +89,8 @@ router.put("/:id", async (req, res) => {
   if (name !== undefined) data.name = name || null;
   if (password) data.password = await bcrypt.hash(password, 10);
   if (isMainAdmin !== undefined) {
-    return res.status(403).json({ error: "Main Admin status can only be changed from Main Admin." });
+    if (!req.user.isMainAdmin) return res.status(403).json({ error: "Only Main Admin can change Main Admin status" });
+    data.isMainAdmin = !!isMainAdmin;
   }
 
   try {
