@@ -40,7 +40,7 @@ router.post("/", authorize("admin", "manager"), async (req, res) => {
     return res.status(403).json({ error: "You can only add donations for your own group" });
   }
   const contact = await prisma.contact.findUnique({ where: { id: Number(contactId) } });
-  if (!contact || Number(contact.groupId) !== Number(groupId)) {
+  if (!contact || !contact.active || Number(contact.groupId) !== Number(groupId)) {
     return res.status(400).json({ error: "This member does not belong to the selected group" });
   }
   if (campaignId) {
@@ -114,7 +114,7 @@ router.post("/bulk", authorize("admin", "manager"), async (req, res) => {
       continue;
     }
     const contact = await prisma.contact.findUnique({ where: { id: Number(contactId) } });
-    if (!contact || !contact.groupId) {
+    if (!contact || !contact.active || !contact.groupId) {
       results.push({ contactId, error: "Contact not found or has no group assigned" });
       continue;
     }

@@ -105,7 +105,7 @@ export default function AdminDashboard() {
                 ${g.totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-gray-400 mt-2">
-                Manager: {g.manager?.name || g.manager?.email || "Unassigned"} · {g._count.contacts} contacts
+                Manager: {g.manager?.name || g.manager?.email || "Unassigned"} · {g.activeCount ?? g._count.contacts} contacts
               </p>
             </div>
           ))}
@@ -123,9 +123,13 @@ export default function AdminDashboard() {
             <input value={contactSearch} onChange={e=>setContactSearch(e.target.value)} placeholder="Search by name, email, or phone..." className="border border-gray-200 bg-gray-50 hover:bg-white rounded-xl px-4 py-3 w-full sm:max-w-md focus:ring-2 focus:ring-brand-200 outline-none" />
             <select value={contactSort} onChange={e=>setContactSort(e.target.value)} className="border border-gray-200 bg-gray-50 hover:bg-white rounded-xl px-4 py-2.5 font-medium text-gray-700 outline-none focus:ring-2 focus:ring-brand-200"><option value="first">First name</option><option value="last">Last name</option><option value="group">Group</option><option value="money">Most money given</option></select>
           </div>
-          <div className="divide-y">{[...contacts].filter(c=>`${c.firstName} ${c.lastName} ${c.email||""}`.toLowerCase().includes(contactSearch.toLowerCase())).sort((a,b)=>contactSort==="money"?(b.totalDonated||0)-(a.totalDonated||0):contactSort==="group"?`${a.group?.name||"~~~~"} ${a.lastName||""} ${a.firstName||""}`.localeCompare(`${b.group?.name||"~~~~"} ${b.lastName||""} ${b.firstName||""}`):contactSort==="last"?`${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`):`${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)).map(c=><div key={c.id} onClick={()=>setModal({type:"contactDetail",data:c})} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-brand-50/60 cursor-pointer transition">
-            <div><p className="font-semibold text-gray-800">{c.firstName} {c.lastName}</p><p className="text-xs text-gray-400">{c.group?.name||"No group"} · {c.email||c.phone||"No contact info"}</p></div>
-            <button onClick={e=>{e.stopPropagation();setModal({type:"donation",data:c})}} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl font-semibold whitespace-nowrap">+ Add Donation</button>
+          <div className="divide-y">{[...contacts].filter(c=>c.active!==false).filter(c=>`${c.firstName} ${c.lastName} ${c.email||""} ${c.phone||""}`.toLowerCase().includes(contactSearch.toLowerCase())).sort((a,b)=>contactSort==="money"?(b.totalDonated||0)-(a.totalDonated||0):contactSort==="group"?`${a.group?.name||"~~~~"} ${a.lastName||""} ${a.firstName||""}`.localeCompare(`${b.group?.name||"~~~~"} ${b.lastName||""} ${b.firstName||""}`):contactSort==="last"?`${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`):`${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)).map(c=><div key={c.id} onClick={()=>setModal({type:"contactDetail",data:c})} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-brand-50/60 cursor-pointer transition">
+            <div className="min-w-0"><p className="font-semibold text-gray-800">{c.firstName} {c.lastName}</p><p className="text-xs text-gray-400 truncate">{c.group?.name||"No group"} · {c.email||c.phone||"No contact info"}</p></div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button title="Edit contact" onClick={e=>{e.stopPropagation();setModal({type:"contact",data:c})}} className="p-2 text-gray-400 hover:text-brand-600"><Pencil size={16}/></button>
+              <button title="Deactivate contact" onClick={e=>{e.stopPropagation();setDeleteTarget({type:"contact",id:c.id,name:`${c.firstName} ${c.lastName}`})}} className="p-2 text-gray-400 hover:text-red-600"><Trash2 size={16}/></button>
+              <button onClick={e=>{e.stopPropagation();setModal({type:"donation",data:c})}} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl font-semibold whitespace-nowrap">+ Add Donation</button>
+            </div>
           </div>)}</div>
         </div>
       )}
@@ -134,20 +138,25 @@ export default function AdminDashboard() {
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {groups.map(g=><div key={g.id} className="text-left bg-white rounded-2xl border shadow-sm p-5 hover:border-brand-300 hover:shadow transition">
             <button onClick={async()=>{try{const r=await api.get(`/groups/${g.id}`);setModal({type:"groupDetail",data:r.data})}catch{}}} className="w-full text-left">
-              <div className="flex justify-between gap-3"><div><h3 className="font-semibold text-gray-800">{g.name}</h3><p className="text-xs text-gray-400 mt-1">{g._count?.contacts||0} contacts · {g.manager?.name||g.manager?.email||"No owner assigned"}</p></div><Pencil size={16} className="text-gray-300"/></div>
+              <div className="flex justify-between gap-3"><div><h3 className="font-semibold text-gray-800">{g.name}</h3><p className="text-xs text-gray-400 mt-1">{g.activeCount ?? g._count?.contacts ?? 0} contacts · {g.manager?.name||g.manager?.email||"No owner assigned"}</p></div><Pencil size={16} className="text-gray-300"/></div>
             </button>
             <div className="mt-5"><p className="text-xs uppercase tracking-wide text-gray-400">Total raised</p><p className="text-2xl font-bold text-brand-700">${Number(g.totalRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})}</p><p className="text-xs text-gray-400 mt-1">${Number(g.monthRaised||0).toLocaleString(undefined,{minimumFractionDigits:2})} this month</p></div>
             <div className="mt-4 flex items-center justify-between gap-3">
               <p className="text-sm text-brand-600 font-medium">View contacts & donations →</p>
-              {user?.isMainAdmin && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: "group", id: g.id, name: g.name }); }}
-                  className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-medium"
-                >
-                  <Trash2 size={14} /> Delete Group
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={(e)=>{e.stopPropagation();setModal({type:"group",data:g})}} className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 font-medium">
+                  <Pencil size={14} /> Edit Group
                 </button>
-              )}
+                {user?.isMainAdmin && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: "group", id: g.id, name: g.name }); }}
+                    className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-medium"
+                  >
+                    <Trash2 size={14} /> Delete Group
+                  </button>
+                )}
+              </div>
             </div>
           </div>)}
           {groups.length===0&&<p className="text-gray-400">No groups yet.</p>}
@@ -254,7 +263,7 @@ export default function AdminDashboard() {
           onContact={(contact) => setModal({ type: "contactDetail", data: contact })}
         />
       )}
-      {deleteTarget && <ConfirmDelete title={`Delete ${deleteTarget.type}?`} message={`Are you sure you want to permanently delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.type==="contact" ? deleteContact(deleteTarget.id) : deleteTarget.type==="group" ? deleteGroup(deleteTarget.id) : deleteUser(deleteTarget.id)} />}
+      {deleteTarget && <ConfirmDelete title={deleteTarget.type === "contact" ? "Deactivate contact?" : `Delete ${deleteTarget.type}?`} message={deleteTarget.type === "contact" ? `${deleteTarget.name} will be hidden from active contacts and group member lists. Existing donations will remain and continue to show this name.` : `Are you sure you want to permanently delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.type==="contact" ? deleteContact(deleteTarget.id) : deleteTarget.type==="group" ? deleteGroup(deleteTarget.id) : deleteUser(deleteTarget.id)} />}
 
       {modal?.type === "bulkDonation" && (
         <BulkDonationEntry contacts={contacts} campaigns={campaigns} onClose={closeModal} onAnySaved={loadAll} />

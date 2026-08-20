@@ -16,7 +16,7 @@ async function managerOwnsGroup(userId, groupId) {
 
 // List contacts (admin: all, manager: own group's, user: forbidden)
 router.get("/", authorize("admin", "manager"), async (req, res) => {
-  let where = {};
+  let where = { active: true };
   if (req.user.role === "manager") {
     const groups = await prisma.group.findMany({ where: { managerId: req.user.id } });
     where.groupId = { in: groups.map((g) => g.id) };
@@ -91,17 +91,17 @@ router.put("/:id", authorize("admin", "manager"), async (req, res) => {
   res.json(contact);
 });
 
-// Delete contact
+// Deactivate contact (soft delete). Keep the record so historical donations retain the donor name.
 router.delete("/:id", authorize("admin", "manager"), async (req, res) => {
   const id = Number(req.params.id);
   const existing = await prisma.contact.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: "Contact not found" });
   if (req.user.role === "manager" && !(await managerOwnsGroup(req.user.id, existing.groupId))) {
-    return res.status(403).json({ error: "You can only delete contacts in your own group" });
+    return res.status(403).json({ error: "You can only deactivate contacts in your own group" });
   }
-  await prisma.contact.delete({ where: { id } });
-  await writeLog(req, "DELETE_CONTACT", { id });
-  res.json({ success: true });
+  const contact = await prisma.contact.update({ where: { id }, data: { active: false } });
+  await writeLog(req, "DEACTIVATE_CONTACT", { id });
+  res.json({ success: true, contact });
 });
 
 // Get one contact with its full donation history

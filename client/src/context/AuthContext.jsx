@@ -9,8 +9,9 @@ export function AuthProvider({ children }) {
     return stored ? JSON.parse(stored) : null;
   });
 
-  async function login(email, password) {
-    const res = await api.post("/auth/login", { email, password });
+  async function login(email, credential, method = "password") {
+    const payload = method === "pin" ? { email, pin: credential } : { email, password: credential };
+    const res = await api.post("/auth/login", payload);
     localStorage.setItem("token", res.data.token);
     localStorage.setItem("user", JSON.stringify(res.data.user));
     setUser(res.data.user);

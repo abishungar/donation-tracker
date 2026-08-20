@@ -24,10 +24,11 @@ router.get("/", authorize("admin", "manager"), async (req, res) => {
         where: { groupId: g.id },
         _sum: { amount: true },
       });
+      const activeCount = await prisma.contact.count({ where: { groupId: g.id, active: true } });
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthly = await prisma.donation.aggregate({ where: { groupId: g.id, date: { gte: start } }, _sum: { amount: true } });
-      return { ...g, totalRaised: sum._sum.amount || 0, monthRaised: monthly._sum.amount || 0 };
+      return { ...g, activeCount, totalRaised: sum._sum.amount || 0, monthRaised: monthly._sum.amount || 0 };
     })
   );
 
@@ -37,7 +38,7 @@ router.get("/", authorize("admin", "manager"), async (req, res) => {
 // Group detail with contacts, donations, and totals
 router.get("/:id", authorize("admin", "manager"), async (req, res) => {
   const id = Number(req.params.id);
-  const group = await prisma.group.findUnique({ where:{id}, include:{ manager:{select:{id:true,email:true,name:true}}, contacts:{orderBy:{firstName:"asc"}}, donations:{include:{contact:true},orderBy:{date:"desc"}} } });
+  const group = await prisma.group.findUnique({ where:{id}, include:{ manager:{select:{id:true,email:true,name:true}}, contacts:{where:{active:true},orderBy:{firstName:"asc"}}, donations:{include:{contact:true},orderBy:{date:"desc"}} } });
   if (!group) return res.status(404).json({error:"Group not found"});
   if (req.user.role === "manager" && group.managerId !== req.user.id) return res.status(403).json({error:"Access denied"});
   const totalRaised = group.donations.reduce((sum,d)=>sum+Number(d.amount || 0),0);
@@ -46,29 +47,43 @@ router.get("/:id", authorize("admin", "manager"), async (req, res) => {
 
 // Create group (admin only)
 router.post("/", authorize("admin"), async (req, res) => {
-  const { name, managerId, managerContactId } = req.body;
+  const { name, managerId, managerContactId, contactIds = [] } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
-  const group = await prisma.group.create({
-    data: { name, managerId: managerId ? Number(managerId) : null, managerContactId: managerContactId ? Number(managerContactId) : null },
+  const ids = Array.isArray(contactIds) ? contactIds.map(Number).filter(Number.isInteger) : [];
+  const group = await prisma.$transaction(async (tx) => {
+    const created = await tx.group.create({
+      data: { name, managerId: managerId ? Number(managerId) : null, managerContactId: managerContactId ? Number(managerContactId) : null },
+    });
+    if (ids.length) {
+      await tx.contact.updateMany({ where: { id: { in: ids }, active: true }, data: { groupId: created.id } });
+    }
+    return created;
   });
-  await writeLog(req, "CREATE_GROUP", { id: group.id, name });
+  await writeLog(req, "CREATE_GROUP", { id: group.id, name, contactIds: ids });
   res.status(201).json(group);
 });
 
 // Update group (admin only)
 router.put("/:id", authorize("admin"), async (req, res) => {
   const id = Number(req.params.id);
-  const { name, managerId, managerContactId } = req.body;
+  const { name, managerId, managerContactId, contactIds } = req.body;
   try {
-    const group = await prisma.group.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(managerId !== undefined && { managerId: managerId ? Number(managerId) : null }),
-        ...(managerContactId !== undefined && { managerContactId: managerContactId ? Number(managerContactId) : null }),
-      },
+    const ids = Array.isArray(contactIds) ? contactIds.map(Number).filter(Number.isInteger) : null;
+    const group = await prisma.$transaction(async (tx) => {
+      const updated = await tx.group.update({
+        where: { id },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(managerId !== undefined && { managerId: managerId ? Number(managerId) : null }),
+          ...(managerContactId !== undefined && { managerContactId: managerContactId ? Number(managerContactId) : null }),
+        },
+      });
+      if (ids) {
+        await tx.contact.updateMany({ where: { id: { in: ids }, active: true }, data: { groupId: id } });
+      }
+      return updated;
     });
-    await writeLog(req, "UPDATE_GROUP", { id });
+    await writeLog(req, "UPDATE_GROUP", { id, contactIds: ids || undefined });
     res.json(group);
   } catch (err) {
     res.status(404).json({ error: "Group not found" });
