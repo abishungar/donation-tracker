@@ -14,6 +14,7 @@ const logRoutes = require("./routes/logs");
 const adminRoutes = require("./routes/admin");
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 4000;
 
 app.use(cors());

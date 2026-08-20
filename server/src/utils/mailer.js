@@ -4,7 +4,7 @@ const prisma = require("../db");
 const EMAIL_KEYS = [
   "email_mode",
   "smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from",
-  "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry", "google_form_default_name", "google_form_default_from",
+  "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry", "email_system_name", "email_from_address",
 ];
 
 async function settings() {
@@ -26,17 +26,14 @@ function toBoolean(value, fallback = false) {
   return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
 }
 
-function normalizeFormId(value) {
+function normalizeFormTarget(value) {
   const raw = String(value || "").trim();
-  if (!raw) return { id: "", prefix: "d" };
-  // Accept a Form ID or either the edit URL / published response URL.
-  // Published Google Forms use /d/e/<ID>/..., while standard Forms use /d/<ID>/... .
+  if (!raw) return { id: "", published: false };
   const published = raw.match(/\/forms\/d\/e\/([^/?#]+)/i);
-  if (published) return { id: published[1], prefix: "d/e" };
+  if (published) return { id: published[1], published: true };
   const standard = raw.match(/\/forms\/d\/([^/?#]+)/i);
-  if (standard) return { id: standard[1], prefix: "d" };
-  const trimmed = raw.replace(/^https?:\/\/[^/]+\//i, "").replace(/^forms\/d\//i, "");
-  return { id: trimmed.split(/[/?#]/)[0], prefix: "d" };
+  if (standard) return { id: standard[1], published: false };
+  return { id: raw.replace(/^https?:\/\/[^/]+\//i, "").split(/[/?#]/)[0], published: false };
 }
 
 function entryName(value) {
@@ -67,49 +64,42 @@ async function verifySmtp() {
 }
 
 async function sendViaGoogleForm(to, subject, html, meta = {}, s) {
-  const formRef = normalizeFormId(s.google_form_id);
-  const formId = formRef.id;
+  const target = normalizeFormTarget(s.google_form_id);
   const emailEntry = entryName(s.google_form_email_entry);
-  if (!formId) throw new Error("Google Form ID is not configured.");
+  if (!target.id) throw new Error("Google Form ID or URL is not configured.");
   if (!emailEntry) throw new Error("Google Form recipient email entry number is not configured.");
   if (!subject) throw new Error("Email subject is required.");
   if (!html) throw new Error("Email body is required.");
 
-  const bodyText = String(html)
-    .replace(/<br\s*\/?\s*>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-
+  const systemName = String(meta.name || s.email_system_name || "Donation Tracker").trim();
+  const fromAddress = String(meta.from || s.email_from_address || s.smtp_from || s.smtp_user || "").trim();
   const params = new URLSearchParams();
   params.set(emailEntry, String(to || "").trim());
   const fields = [
-    ["google_form_name_entry", meta.name || s.google_form_default_name || s.smtp_user || ""],
-    ["google_form_from_entry", meta.from || s.google_form_default_from || s.smtp_from || s.smtp_user || ""],
+    ["google_form_name_entry", systemName],
+    ["google_form_from_entry", fromAddress],
     ["google_form_subject_entry", subject],
-    ["google_form_body_entry", bodyText],
+    // Keep the HTML intact so the Google Apps Script can use it as htmlBody.
+    ["google_form_body_entry", String(html)],
   ];
   for (const [settingKey, value] of fields) {
     const key = entryName(s[settingKey]);
-    if (key && value !== undefined && value !== "") params.set(key, String(value));
+    if (key && value !== undefined) params.set(key, String(value));
   }
 
-  const url = `https://docs.google.com/forms/${formRef.prefix}/${encodeURIComponent(formId)}/formResponse`;
+  const path = target.published ? `/forms/d/e/${encodeURIComponent(target.id)}/formResponse` : `/forms/d/${encodeURIComponent(target.id)}/formResponse`;
+  const url = `https://docs.google.com${path}`;
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", "User-Agent": "DonationTracker/1.0" },
     body: params.toString(),
     redirect: "manual",
   });
-  // Google Forms commonly returns 200 or 302 for a successful formResponse POST.
   if (![200, 302].includes(response.status)) {
     const text = await response.text().catch(() => "");
-    throw new Error(`Google Form submission failed with HTTP ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
+    throw new Error(`Google Form submission failed with HTTP ${response.status}${text ? `: ${text.slice(0, 300)}` : ""}`);
   }
-  return { messageId: `google-form-${Date.now()}`, mode: "google_form", status: response.status };
+  return { messageId: `google-form-${Date.now()}`, mode: "google_form", status: response.status, name: systemName, from: fromAddress };
 }
 
 async function sendMail(to, subject, html, meta = {}) {
