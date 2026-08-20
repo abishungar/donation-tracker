@@ -98,4 +98,134 @@ router.post("/import", main, async (req, res) => {
   res.json({ success: true, created });
 });
 
+
+function normalizePhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function parseImportDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  const raw = String(value || "").trim();
+  if (!raw) return new Date();
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) return d;
+  // Also support common MM/DD/YYYY and M/D/YYYY spreadsheet values.
+  const m = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  if (m) {
+    const year = Number(m[3]) < 100 ? 2000 + Number(m[3]) : Number(m[3]);
+    const parsed = new Date(year, Number(m[1]) - 1, Number(m[2]));
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return null;
+}
+
+router.post("/import-donations", main, async (req, res) => {
+  const { rows, mapping = {} } = req.body;
+  if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: "rows array is required" });
+  if (!mapping.amount) return res.status(400).json({ error: "Map an Amount column." });
+
+  const get = (row, key) => {
+    const source = mapping[key];
+    return source ? row[source] : "";
+  };
+
+  // Load once so large sheets do not issue a query for every matching attempt.
+  const [contacts, groups] = await Promise.all([
+    prisma.contact.findMany({ include: { group: true } }),
+    prisma.group.findMany(),
+  ]);
+  const byEmail = new Map();
+  const byPhone = new Map();
+  const byName = new Map();
+  const byId = new Map(contacts.map(c => [String(c.id), c]));
+  for (const c of contacts) {
+    if (c.email) byEmail.set(String(c.email).trim().toLowerCase(), c);
+    const phone = normalizePhone(c.phone);
+    if (phone) byPhone.set(phone, c);
+    const name = `${normalizeName(c.firstName)}|${normalizeName(c.lastName)}`;
+    if (name !== "|") {
+      const list = byName.get(name) || [];
+      list.push(c);
+      byName.set(name, list);
+    }
+  }
+
+  const groupByName = new Map(groups.map(g => [String(g.name).trim().toLowerCase(), g]));
+  const failures = [];
+  let created = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] || {};
+    const amountRaw = String(get(row, "amount") ?? "").replace(/[$,\s]/g, "");
+    const amount = Number(amountRaw);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      failures.push({ row: i + 2, error: "Invalid or missing donation amount", value: get(row, "amount") });
+      continue;
+    }
+
+    const contactValue = String(get(row, "contact") || "").trim();
+    const email = String(get(row, "email") || "").trim().toLowerCase();
+    const phone = normalizePhone(get(row, "phone"));
+    const firstName = String(get(row, "firstName") || "").trim();
+    const lastName = String(get(row, "lastName") || "").trim();
+    let contact = null;
+
+    if (contactValue && byId.has(contactValue)) contact = byId.get(contactValue);
+    if (!contact && email) contact = byEmail.get(email) || null;
+    if (!contact && phone) contact = byPhone.get(phone) || null;
+    if (!contact && (firstName || lastName)) {
+      const matches = byName.get(`${normalizeName(firstName)}|${normalizeName(lastName)}`) || [];
+      if (matches.length === 1) contact = matches[0];
+      else if (matches.length > 1) {
+        failures.push({ row: i + 2, error: "Multiple contacts have this name; map Contact ID or Email", name: `${firstName} ${lastName}`.trim() });
+        continue;
+      }
+    }
+    if (!contact) {
+      failures.push({ row: i + 2, error: "Could not match this donation to a contact", email, name: `${firstName} ${lastName}`.trim() });
+      continue;
+    }
+
+    let group = null;
+    const groupName = String(get(row, "group") || "").trim().toLowerCase();
+    if (groupName) {
+      group = groupByName.get(groupName) || null;
+      if (!group) {
+        group = await prisma.group.create({ data: { name: String(get(row, "group")).trim() } });
+        groupByName.set(groupName, group);
+      }
+    } else if (contact.groupId) {
+      group = groups.find(g => g.id === contact.groupId) || null;
+    }
+    if (!group) {
+      failures.push({ row: i + 2, error: "No group found. Map a Group column or assign the contact to a group first" });
+      continue;
+    }
+
+    const date = parseImportDate(get(row, "date"));
+    if (!date) {
+      failures.push({ row: i + 2, error: "Invalid donation date", value: get(row, "date") });
+      continue;
+    }
+
+    const type = String(get(row, "type") || "Online").trim() || "Online";
+    try {
+      const donation = await prisma.donation.create({
+        data: { amount, contactId: contact.id, groupId: group.id, date, type, createdById: req.user.id },
+      });
+      created++;
+      await writeLog(req, "IMPORT_DONATION", { id: donation.id, row: i + 2, amount, contactId: contact.id, groupId: group.id });
+    } catch (err) {
+      failures.push({ row: i + 2, error: err.message || "Could not create donation" });
+    }
+  }
+
+  await writeLog(req, "IMPORT_DONATIONS", { created, failed: failures.length, attempted: rows.length });
+  res.json({ success: true, created, failed: failures.length, failures: failures.slice(0, 200) });
+});
+
 module.exports = router;
