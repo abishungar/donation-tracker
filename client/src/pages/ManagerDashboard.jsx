@@ -5,7 +5,7 @@ import DonationModal from "../components/DonationModal.jsx";
 import ContactDetailModal from "../components/ContactDetailModal.jsx";
 import BulkDonationEntry from "../components/BulkDonationEntry.jsx";
 import api from "../api";
-import { UserPlus, HeartHandshake, Pencil, Trash2, Rows3 } from "lucide-react";
+import { HeartHandshake, Pencil, Trash2, Rows3 } from "lucide-react";
 
 export default function ManagerDashboard() {
   const [groups, setGroups] = useState([]);
@@ -47,12 +47,6 @@ export default function ManagerDashboard() {
         <h1 className="text-2xl font-semibold text-gray-800">{myGroup ? myGroup.name : "My Group"}</h1>
         {myGroup && (
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setModal({ type: "contact" })}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:border-brand-300"
-            >
-              <UserPlus size={15} /> Add Contact
-            </button>
             <button
               onClick={() => setModal({ type: "bulkDonation" })}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:border-brand-300"

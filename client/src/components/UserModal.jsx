@@ -11,7 +11,6 @@ export default function UserModal({ contacts, groups = [], user, onClose, onSave
     role: user?.role || "user",
     contactId: user?.contactId || "",
     groupId: user?.managedGroups?.[0]?.id || "",
-    isMainAdmin: !!user?.isMainAdmin,
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -90,14 +89,6 @@ export default function UserModal({ contacts, groups = [], user, onClose, onSave
               ))}
             </select>
           </Field>
-        )}
-
-        {form.role === "admin" && (
-          <label className="flex items-center gap-2 text-sm mb-4">
-            <input type="checkbox" checked={form.isMainAdmin}
-              onChange={(e) => setForm({ ...form, isMainAdmin: e.target.checked })} />
-            Main Admin
-          </label>
         )}
 
         {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
