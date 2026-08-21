@@ -3,6 +3,7 @@ const prisma = require("../db");
 
 const EMAIL_KEYS = [
   "app_name",
+  "website_version", "app_version",
   "email_mode",
   "smtp_host", "smtp_port", "smtp_secure", "smtp_user", "smtp_app_password", "smtp_from",
   "google_form_id", "google_form_email_entry", "google_form_name_entry", "google_form_from_entry", "google_form_subject_entry", "google_form_body_entry", "email_system_name", "email_from_address",
