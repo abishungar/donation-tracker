@@ -71,9 +71,9 @@ export default function MainAdminPage() {
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-semibold text-gray-800">Main Admin</h1>
-            {(settings.website_version || settings.app_version) && <span className="inline-flex items-center rounded-full bg-brand-50 text-brand-700 border border-brand-100 px-3 py-1 text-xs font-semibold">Version {settings.website_version || settings.app_version}</span>}
           </div>
           <p className="text-sm text-gray-500 mt-1">System-wide administration, Main Admin users, and email delivery.</p>
+          <p className="text-sm font-semibold text-gray-600 mt-1">Version {settings.website_version || settings.app_version || "2.5.0"}</p>
         </div>
         <ShieldCheck className="text-brand-600" size={30} />
       </div>

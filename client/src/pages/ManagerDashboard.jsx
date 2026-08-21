@@ -58,8 +58,8 @@ export default function ManagerDashboard() {
             >
               <Rows3 size={15} /> Bulk Add Donations
             </button>
-            <PdfReportButton url={`/reports/groups/${myGroup.id}/pdf`} label="Group PDF" />
-            <PdfReportButton url="/reports/contacts/pdf" label="All Donations PDF" />
+            <PdfReportButton url={`/reports/groups/${myGroup.id}/pdf`} label="Group PDF" allowPeriod />
+            <PdfReportButton url="/reports/contacts/pdf" label="All Donations PDF" allowPeriod />
             <button
               onClick={() => setModal({ type: "donation" })}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white"
@@ -126,7 +126,7 @@ export default function ManagerDashboard() {
                       <span className={`text-xs px-2 py-0.5 rounded-full ${c.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>
                         {c.active ? "Active" : "Inactive"}
                       </span>
-                      <PdfReportButton url={`/reports/contacts/${c.id}/pdf`} label="PDF" className="text-xs text-gray-600 hover:text-brand-600 whitespace-nowrap" />
+                      <PdfReportButton url={`/reports/contacts/${c.id}/pdf`} label="PDF" allowPeriod className="text-xs text-gray-600 hover:text-brand-600 whitespace-nowrap" />
                       <button
                         onClick={() => setModal({ type: "donation", data: c })}
                         className="text-xs text-brand-600 hover:underline whitespace-nowrap"

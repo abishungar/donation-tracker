@@ -185,46 +185,118 @@ function footer(doc, branding) {
   }
 }
 
+function reportDateWhere(period) {
+  if (String(period || "this_month") === "all") return null;
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return { gte: start, lt: end };
+}
+
+function donorName(contact) {
+  return safeText(`${contact?.firstName || ""} ${contact?.lastName || ""}`) || "Unknown donor";
+}
+
+function groupDonationsByDonor(ds) {
+  const map = new Map();
+  for (const d of ds) {
+    const key = d.contactId;
+    const item = map.get(key) || { id: key, name: donorName(d.contact), count: 0, total: 0, lastDate: null };
+    item.count += 1;
+    item.total += Number(d.amount || 0);
+    const dt = new Date(d.date);
+    if (!item.lastDate || dt > item.lastDate) item.lastDate = dt;
+    map.set(key, item);
+  }
+  return Array.from(map.values()).sort((a,b) => b.total - a.total || a.name.localeCompare(b.name));
+}
+
 router.get("/groups/:id/pdf", async (req, res) => {
-  const id = Number(req.params.id), month = req.query.month;
+  const id = Number(req.params.id);
   const g = await prisma.group.findUnique({ where: { id }, include: { manager: { select: { name: true, email: true } } } });
   if (!g) return res.status(404).json({ error: "Group not found" });
   if (req.user.role === "manager" && g.managerId !== req.user.id) return res.status(403).json({ error: "Not authorized" });
   if (!["admin", "manager"].includes(req.user.role)) return res.status(403).json({ error: "Not authorized" });
-  let where = { groupId: id };
-  if (month) { const start = new Date(month + "-01T00:00:00"); const end = new Date(start.getFullYear(), start.getMonth() + 1, 1); where.date = { gte: start, lt: end }; }
+  const period = String(req.query.period || "this_month");
+  const dateWhere = reportDateWhere(period);
+  const where = { groupId: id, ...(dateWhere ? { date: dateWhere } : {}) };
   const ds = await prisma.donation.findMany({ where, include: { contact: true, campaign: true }, orderBy: { date: "desc" } });
-  const branding = await getBranding(); const total = ds.reduce((a,d)=>a+d.amount,0);
-  res.setHeader("Content-Type", "application/pdf"); res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(g.name)}-donations.pdf"`);
-  const doc = new PDFDocument({ margin: 42, size: "A4", bufferPages: true }); doc.pipe(res);
-  drawHeader(doc, branding, `${g.name} Donation Report`, month ? `Monthly report · ${month}` : "Group donation history");
-  drawSummary(doc, [{label:"Total Raised",value:money(total)},{label:"Donations",value:String(ds.length)},{label:"Manager",value:safeText(g.manager?.name || g.manager?.email || "Not assigned")}]);
-  const cols=[{label:"DATE",width:.15},{label:"DONOR",width:.27},{label:"CAMPAIGN",width:.24},{label:"TYPE",width:.16},{label:"AMOUNT",width:.18}];
-  let widths=drawTableHeader(doc,cols); ds.forEach((d,i)=>{ if(doc.y+22>doc.page.height-55){doc.addPage(); drawHeader(doc,branding,`${g.name} Donation Report`,month?`Monthly report · ${month}`:"Group donation history"); widths=drawTableHeader(doc,cols);} drawTableRow(doc,cols,widths,[new Date(d.date).toLocaleDateString(),`${d.contact.firstName} ${d.contact.lastName}`,d.campaign?.name||"—",d.type||"—",money(d.amount)],i%2===1); });
-  if(!ds.length) doc.fillColor("#6b7280").fontSize(10).text("No donations recorded for this period."); footer(doc,branding); doc.end();
+  const donors = groupDonationsByDonor(ds);
+  const total = ds.reduce((a,d)=>a+Number(d.amount||0),0);
+  const branding = await getBranding();
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(g.name)}-donations.pdf"`);
+  const doc = new PDFDocument({ margin: 42, size: "A4", bufferPages: true });
+  doc.pipe(res);
+  const subtitle = period === "all" ? "All-time donation summary" : "Current month donation summary";
+  drawHeader(doc, branding, `${g.name} Donation Report`, subtitle);
+  drawSummary(doc, [
+    {label:"Total Raised",value:money(total)},
+    {label:"Donors",value:String(donors.length)},
+    {label:"Donations",value:String(ds.length)},
+    {label:"Manager",value:safeText(g.manager?.name || g.manager?.email || "Not assigned")}
+  ]);
+  const cols=[{label:"DONOR",width:.42},{label:"DONATIONS",width:.18},{label:"LAST DONATION",width:.20},{label:"TOTAL",width:.20}];
+  let widths=drawTableHeader(doc,cols);
+  donors.forEach((d,i)=>{
+    if(doc.y+22>doc.page.height-55){doc.addPage();drawHeader(doc,branding,`${g.name} Donation Report`,subtitle);drawSummary(doc,[{label:"Total Raised",value:money(total)},{label:"Donors",value:String(donors.length)},{label:"Donations",value:String(ds.length)}]);widths=drawTableHeader(doc,cols);}
+    drawTableRow(doc,cols,widths,[d.name,String(d.count),d.lastDate?.toLocaleDateString()||"—",money(d.total)],i%2===1);
+  });
+  if(!donors.length) doc.fillColor("#6b7280").fontSize(10).text("No donations recorded for this period.");
+  footer(doc,branding); doc.end();
 });
 
 async function allowedContact(req, contactId) {
   const c = await prisma.contact.findUnique({ where: { id: contactId }, select: { id: true, firstName: true, lastName: true, groupId: true } });
-  if (!c) return { error: "Contact not found" }; if (req.user.role === "admin") return { contact: c };
-  if (req.user.role === "manager") { const g = c.groupId ? await prisma.group.findUnique({ where: { id: c.groupId }, select: { managerId: true } }) : null; if (g?.managerId === req.user.id) return { contact: c }; }
+  if (!c) return { error: "Contact not found" };
+  if (req.user.role === "admin") return { contact: c };
+  if (req.user.role === "manager") {
+    const g = c.groupId ? await prisma.group.findUnique({ where: { id: c.groupId }, select: { managerId: true } }) : null;
+    if (g?.managerId === req.user.id) return { contact: c };
+  }
   return { error: "Not authorized" };
 }
 
 router.get("/contacts/:id/pdf", async (req,res)=>{
-  const id=Number(req.params.id), allowed=await allowedContact(req,id); if(allowed.error)return res.status(allowed.error==="Contact not found"?404:403).json({error:allowed.error});
-  const c=allowed.contact, ds=await prisma.donation.findMany({where:{contactId:id},include:{group:true,campaign:true},orderBy:{date:"desc"}}); const total=ds.reduce((a,d)=>a+d.amount,0), branding=await getBranding();
-  res.setHeader("Content-Type","application/pdf"); res.setHeader("Content-Disposition",`inline; filename="${encodeURIComponent(c.firstName+'-'+c.lastName)}-donations.pdf"`);
-  const doc=new PDFDocument({margin:42,size:"A4",bufferPages:true}); doc.pipe(res); drawHeader(doc,branding,`${c.firstName} ${c.lastName} Donation Report`,"Individual donation history"); drawSummary(doc,[{label:"Total Donated",value:money(total)},{label:"Donations",value:String(ds.length)},{label:"Group",value:safeText((await prisma.group.findUnique({where:{id:c.groupId||0}}))?.name||"No group")}]);
-  const cols=[{label:"DATE",width:.17},{label:"GROUP",width:.27},{label:"CAMPAIGN",width:.25},{label:"TYPE",width:.13},{label:"AMOUNT",width:.18}]; let widths=drawTableHeader(doc,cols); ds.forEach((d,i)=>{if(doc.y+22>doc.page.height-55){doc.addPage();drawHeader(doc,branding,`${c.firstName} ${c.lastName} Donation Report`,"Individual donation history");widths=drawTableHeader(doc,cols);}drawTableRow(doc,cols,widths,[new Date(d.date).toLocaleDateString(),d.group?.name||"—",d.campaign?.name||"—",d.type||"—",money(d.amount)],i%2===1);}); if(!ds.length)doc.fillColor("#6b7280").fontSize(10).text("No donations recorded."); footer(doc,branding); doc.end();
+  const id=Number(req.params.id), allowed=await allowedContact(req,id);
+  if(allowed.error)return res.status(allowed.error==="Contact not found"?404:403).json({error:allowed.error});
+  const period=String(req.query.period||"this_month"), dateWhere=reportDateWhere(period);
+  const c=allowed.contact;
+  const ds=await prisma.donation.findMany({where:{contactId:id,...(dateWhere?{date:dateWhere}:{})},include:{group:true,campaign:true},orderBy:{date:"desc"}});
+  const total=ds.reduce((a,d)=>a+Number(d.amount||0),0), branding=await getBranding();
+  res.setHeader("Content-Type","application/pdf");res.setHeader("Content-Disposition",`inline; filename="${encodeURIComponent(c.firstName+'-'+c.lastName)}-donations.pdf"`);
+  const doc=new PDFDocument({margin:42,size:"A4",bufferPages:true});doc.pipe(res);
+  const subtitle=period==="all"?"All-time individual donation history":"Current month individual donation history";
+  drawHeader(doc,branding,`${donorName(c)} Donation Report`,subtitle);
+  drawSummary(doc,[{label:"Total Donated",value:money(total)},{label:"Donations",value:String(ds.length)},{label:"Group",value:safeText((await prisma.group.findUnique({where:{id:c.groupId||0}}))?.name||"No group")}]);
+  const cols=[{label:"DATE",width:.17},{label:"GROUP",width:.30},{label:"CAMPAIGN",width:.27},{label:"TYPE",width:.12},{label:"AMOUNT",width:.14}];
+  let widths=drawTableHeader(doc,cols);
+  ds.forEach((d,i)=>{if(doc.y+22>doc.page.height-55){doc.addPage();drawHeader(doc,branding,`${donorName(c)} Donation Report`,subtitle);widths=drawTableHeader(doc,cols);}drawTableRow(doc,cols,widths,[new Date(d.date).toLocaleDateString(),d.group?.name||"—",d.campaign?.name||"—",d.type||"—",money(d.amount)],i%2===1);});
+  if(!ds.length)doc.fillColor("#6b7280").fontSize(10).text("No donations recorded for this period.");footer(doc,branding);doc.end();
 });
 
 router.get("/contacts/pdf", async (req,res)=>{
-  if(!["admin","manager"].includes(req.user.role))return res.status(403).json({error:"Not authorized"}); let where={}; if(req.user.role==="manager"){const gs=await prisma.group.findMany({where:{managerId:req.user.id},select:{id:true}});where={groupId:{in:gs.map(g=>g.id)}};}
-  const ds=await prisma.donation.findMany({where,include:{contact:true,group:true,campaign:true},orderBy:{date:"desc"}}),total=ds.reduce((a,d)=>a+d.amount,0),grouped=new Map(); for(const d of ds){const k=d.contactId;if(!grouped.has(k))grouped.set(k,{name:`${d.contact.firstName} ${d.contact.lastName}`,total:0,donations:[]});const it=grouped.get(k);it.total+=d.amount;it.donations.push(d);} const branding=await getBranding();
+  if(!["admin","manager"].includes(req.user.role))return res.status(403).json({error:"Not authorized"});
+  const period=String(req.query.period||"this_month"), dateWhere=reportDateWhere(period);
+  let where={};
+  if(req.user.role==="manager"){
+    const gs=await prisma.group.findMany({where:{managerId:req.user.id},select:{id:true}});
+    where={groupId:{in:gs.map(g=>g.id)}};
+  }
+  if(dateWhere) where.date=dateWhere;
+  const ds=await prisma.donation.findMany({where,include:{contact:true,group:true,campaign:true},orderBy:{date:"desc"}});
+  const total=ds.reduce((a,d)=>a+Number(d.amount||0),0), donors=groupDonationsByDonor(ds), branding=await getBranding();
+  const groupByDonor=new Map();
+  for(const d of ds){ if(!groupByDonor.has(d.contactId))groupByDonor.set(d.contactId,d.group?.name||"—"); }
   res.setHeader("Content-Type","application/pdf");res.setHeader("Content-Disposition", `inline; filename="all-contact-donations.pdf"`);
-  const doc=new PDFDocument({margin:42,size:"A4",bufferPages:true});doc.pipe(res);drawHeader(doc,branding,"All Contact Donation Report",req.user.role==="manager"?"Manager report · managed groups only":"All groups");drawSummary(doc,[{label:"Total Raised",value:money(total)},{label:"Donations",value:String(ds.length)},{label:"Contacts",value:String(grouped.size)}]);
-  const cols=[{label:"DATE",width:.15},{label:"CONTACT",width:.27},{label:"GROUP",width:.22},{label:"CAMPAIGN",width:.20},{label:"AMOUNT",width:.16}];let widths=drawTableHeader(doc,cols);ds.forEach((d,i)=>{if(doc.y+22>doc.page.height-55){doc.addPage();drawHeader(doc,branding,"All Contact Donation Report",req.user.role==="manager"?"Manager report · managed groups only":"All groups");widths=drawTableHeader(doc,cols);}drawTableRow(doc,cols,widths,[new Date(d.date).toLocaleDateString(),`${d.contact.firstName} ${d.contact.lastName}`,d.group?.name||"—",d.campaign?.name||"—",money(d.amount)],i%2===1);});if(!ds.length)doc.fillColor("#6b7280").fontSize(10).text("No donations recorded.");footer(doc,branding);doc.end();
+  const doc=new PDFDocument({margin:42,size:"A4",bufferPages:true});doc.pipe(res);
+  const subtitle=req.user.role==="manager"?(period==="all"?"All-time · managed groups only":"Current month · managed groups only"):(period==="all"?"All-time · all groups":"Current month · all groups");
+  drawHeader(doc,branding,"Donor Summary Report",subtitle);
+  drawSummary(doc,[{label:"Total Raised",value:money(total)},{label:"Donors",value:String(donors.length)},{label:"Donations",value:String(ds.length)}]);
+  const cols=[{label:"DONOR",width:.34},{label:"GROUP",width:.27},{label:"DONATIONS",width:.15},{label:"LAST DONATION",width:.14},{label:"TOTAL",width:.10}];
+  let widths=drawTableHeader(doc,cols);
+  donors.forEach((d,i)=>{if(doc.y+22>doc.page.height-55){doc.addPage();drawHeader(doc,branding,"Donor Summary Report",subtitle);widths=drawTableHeader(doc,cols);}drawTableRow(doc,cols,widths,[d.name,groupByDonor.get(d.id)||"—",String(d.count),d.lastDate?.toLocaleDateString()||"—",money(d.total)],i%2===1);});
+  if(!donors.length)doc.fillColor("#6b7280").fontSize(10).text("No donations recorded for this period.");footer(doc,branding);doc.end();
 });
 
 module.exports = router;
