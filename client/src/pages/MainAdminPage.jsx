@@ -67,12 +67,15 @@ export default function MainAdminPage() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-800">Main Admin</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-semibold text-gray-800">Main Admin</h1>
+            {(settings.website_version || settings.app_version) && <span className="inline-flex items-center rounded-full bg-brand-50 text-brand-700 border border-brand-100 px-3 py-1 text-xs font-semibold">Version {settings.website_version || settings.app_version}</span>}
+          </div>
           <p className="text-sm text-gray-500 mt-1">System-wide administration, Main Admin users, and email delivery.</p>
         </div>
-        <div className="text-right"><ShieldCheck className="text-brand-600 ml-auto" size={30} />{(settings.website_version || settings.app_version) && <p className="text-xs text-gray-400 mt-1">v{settings.website_version || settings.app_version}</p>}</div>
+        <ShieldCheck className="text-brand-600" size={30} />
       </div>
 
       {error && <p className="text-sm text-red-600 mb-4 bg-red-50 rounded-lg p-3">{error}</p>}

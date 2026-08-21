@@ -7,16 +7,19 @@ export default function PdfReportButton({ url, label = "PDF Report", className =
   async function openReport(e) {
     e?.stopPropagation();
     if (loading) return;
+    // Open a tab immediately from the user click so popup blockers do not interfere.
+    const win = window.open("about:blank", "_blank");
+    if (!win) { alert("Please allow pop-ups for this website to view the PDF report."); return; }
+    win.document.title = "Preparing report…";
+    win.document.body.innerHTML = '<div style="font-family:Arial,sans-serif;padding:40px;text-align:center;color:#374151">Preparing your report…</div>';
     setLoading(true);
     try {
       const res = await api.get(url, { responseType: "blob" });
       const blobUrl = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
-      const win = window.open(blobUrl, "_blank", "noopener,noreferrer");
-      if (!win) {
-        const a = document.createElement("a"); a.href = blobUrl; a.download = "donation-report.pdf"; a.click();
-      }
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      win.location.href = blobUrl;
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5 * 60 * 1000);
     } catch (err) {
+      win.close();
       const text = await err.response?.data?.text?.().catch(() => null);
       alert(text || err.response?.data?.error || "Could not create PDF report.");
     } finally { setLoading(false); }
