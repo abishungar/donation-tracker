@@ -126,7 +126,7 @@ export default function ManagerDashboard() {
                       <span className={`text-xs px-2 py-0.5 rounded-full ${c.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-400"}`}>
                         {c.active ? "Active" : "Inactive"}
                       </span>
-                      <PdfReportButton url={`/reports/contacts/${c.id}/pdf`} label="PDF" allowPeriod className="text-xs text-gray-600 hover:text-brand-600 whitespace-nowrap" />
+                      
                       <button
                         onClick={() => setModal({ type: "donation", data: c })}
                         className="text-xs text-brand-600 hover:underline whitespace-nowrap"

@@ -201,14 +201,57 @@ function groupDonationsByDonor(ds) {
   const map = new Map();
   for (const d of ds) {
     const key = d.contactId;
-    const item = map.get(key) || { id: key, name: donorName(d.contact), count: 0, total: 0, lastDate: null };
+    const item = map.get(key) || {
+      id: key,
+      name: donorName(d.contact),
+      email: safeText(d.contact?.email),
+      phone: safeText(d.contact?.phone),
+      group: safeText(d.group?.name),
+      count: 0,
+      total: 0,
+      lastDate: null
+    };
     item.count += 1;
     item.total += Number(d.amount || 0);
     const dt = new Date(d.date);
     if (!item.lastDate || dt > item.lastDate) item.lastDate = dt;
+    if (!item.group && d.group?.name) item.group = safeText(d.group.name);
     map.set(key, item);
   }
   return Array.from(map.values()).sort((a,b) => b.total - a.total || a.name.localeCompare(b.name));
+}
+
+function drawDonorListHeader(doc, title) {
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(10).text(title, doc.page.margins.left, doc.y);
+  doc.y += 18;
+  doc.roundedRect(doc.page.margins.left, doc.y, width, 26, 7).fill("#f3f4f6");
+  doc.fillColor("#6b7280").font("Helvetica-Bold").fontSize(7.5)
+    .text("DONOR", doc.page.margins.left + 10, doc.y + 8)
+    .text("GROUP", doc.page.margins.left + width * .43 + 8, doc.y + 8)
+    .text("GIFTS", doc.page.margins.left + width * .67 + 8, doc.y + 8)
+    .text("TOTAL", doc.page.margins.left + width * .84 + 8, doc.y + 8);
+  doc.y += 34;
+}
+
+function drawDonorRow(doc, donor, zebra) {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const rowH = 43;
+  if (doc.y + rowH > doc.page.height - 55) return false;
+  if (zebra) doc.roundedRect(left, doc.y, width, rowH, 7).fill("#fafafa");
+  const y = doc.y;
+  const initials = donor.name.split(/\s+/).map(x => x[0] || "").join("").slice(0,2).toUpperCase() || "?";
+  doc.circle(left + 18, y + 21, 12).fill("#e0e7ff");
+  doc.fillColor("#3730a3").font("Helvetica-Bold").fontSize(7).text(initials, left + 11, y + 18, {width:14, align:"center"});
+  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(8.5).text(donor.name, left + 36, y + 8, {width: width*.39 - 40, ellipsis:true});
+  const secondary = donor.email || donor.phone || "";
+  if (secondary) doc.fillColor("#9ca3af").font("Helvetica").fontSize(6.8).text(secondary, left + 36, y + 23, {width: width*.39 - 40, ellipsis:true});
+  doc.fillColor("#374151").font("Helvetica").fontSize(7.5).text(donor.group || "—", left + width*.43 + 8, y + 16, {width: width*.22 - 14, ellipsis:true});
+  doc.fillColor("#374151").font("Helvetica-Bold").fontSize(8).text(String(donor.count), left + width*.67 + 8, y + 16, {width: width*.12, align:"center"});
+  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(8.5).text(money(donor.total), left + width*.84 + 8, y + 16, {width: width*.14 - 8, align:"right"});
+  doc.y += rowH + 3;
+  return true;
 }
 
 router.get("/groups/:id/pdf", async (req, res) => {
@@ -221,7 +264,7 @@ router.get("/groups/:id/pdf", async (req, res) => {
   const dateWhere = reportDateWhere(period);
   const where = { groupId: id, ...(dateWhere ? { date: dateWhere } : {}) };
   const ds = await prisma.donation.findMany({ where, include: { contact: true, campaign: true }, orderBy: { date: "desc" } });
-  const donors = groupDonationsByDonor(ds);
+  const donors = groupDonationsByDonor(ds).map(d => ({ ...d, group: g.name }));
   const total = ds.reduce((a,d)=>a+Number(d.amount||0),0);
   const branding = await getBranding();
   res.setHeader("Content-Type", "application/pdf");
@@ -236,11 +279,12 @@ router.get("/groups/:id/pdf", async (req, res) => {
     {label:"Donations",value:String(ds.length)},
     {label:"Manager",value:safeText(g.manager?.name || g.manager?.email || "Not assigned")}
   ]);
-  const cols=[{label:"DONOR",width:.42},{label:"DONATIONS",width:.18},{label:"LAST DONATION",width:.20},{label:"TOTAL",width:.20}];
-  let widths=drawTableHeader(doc,cols);
+  drawDonorListHeader(doc, "Donors");
   donors.forEach((d,i)=>{
-    if(doc.y+22>doc.page.height-55){doc.addPage();drawHeader(doc,branding,`${g.name} Donation Report`,subtitle);drawSummary(doc,[{label:"Total Raised",value:money(total)},{label:"Donors",value:String(donors.length)},{label:"Donations",value:String(ds.length)}]);widths=drawTableHeader(doc,cols);}
-    drawTableRow(doc,cols,widths,[d.name,String(d.count),d.lastDate?.toLocaleDateString()||"—",money(d.total)],i%2===1);
+    if(!drawDonorRow(doc,d,i%2===1)){
+      doc.addPage(); drawHeader(doc,branding,`${g.name} Donation Report`,subtitle);
+      drawDonorListHeader(doc, "Donors — continued"); drawDonorRow(doc,d,i%2===1);
+    }
   });
   if(!donors.length) doc.fillColor("#6b7280").fontSize(10).text("No donations recorded for this period.");
   footer(doc,branding); doc.end();
@@ -286,16 +330,18 @@ router.get("/contacts/pdf", async (req,res)=>{
   if(dateWhere) where.date=dateWhere;
   const ds=await prisma.donation.findMany({where,include:{contact:true,group:true,campaign:true},orderBy:{date:"desc"}});
   const total=ds.reduce((a,d)=>a+Number(d.amount||0),0), donors=groupDonationsByDonor(ds), branding=await getBranding();
-  const groupByDonor=new Map();
-  for(const d of ds){ if(!groupByDonor.has(d.contactId))groupByDonor.set(d.contactId,d.group?.name||"—"); }
   res.setHeader("Content-Type","application/pdf");res.setHeader("Content-Disposition", `inline; filename="all-contact-donations.pdf"`);
   const doc=new PDFDocument({margin:42,size:"A4",bufferPages:true});doc.pipe(res);
   const subtitle=req.user.role==="manager"?(period==="all"?"All-time · managed groups only":"Current month · managed groups only"):(period==="all"?"All-time · all groups":"Current month · all groups");
   drawHeader(doc,branding,"Donor Summary Report",subtitle);
   drawSummary(doc,[{label:"Total Raised",value:money(total)},{label:"Donors",value:String(donors.length)},{label:"Donations",value:String(ds.length)}]);
-  const cols=[{label:"DONOR",width:.34},{label:"GROUP",width:.27},{label:"DONATIONS",width:.15},{label:"LAST DONATION",width:.14},{label:"TOTAL",width:.10}];
-  let widths=drawTableHeader(doc,cols);
-  donors.forEach((d,i)=>{if(doc.y+22>doc.page.height-55){doc.addPage();drawHeader(doc,branding,"Donor Summary Report",subtitle);widths=drawTableHeader(doc,cols);}drawTableRow(doc,cols,widths,[d.name,groupByDonor.get(d.id)||"—",String(d.count),d.lastDate?.toLocaleDateString()||"—",money(d.total)],i%2===1);});
+  drawDonorListHeader(doc, "Donors");
+  donors.forEach((d,i)=>{
+    if(!drawDonorRow(doc,d,i%2===1)){
+      doc.addPage(); drawHeader(doc,branding,"Donor Summary Report",subtitle);
+      drawDonorListHeader(doc, "Donors — continued"); drawDonorRow(doc,d,i%2===1);
+    }
+  });
   if(!donors.length)doc.fillColor("#6b7280").fontSize(10).text("No donations recorded for this period.");footer(doc,branding);doc.end();
 });
 

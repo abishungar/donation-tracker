@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Modal from "./Modal.jsx";
 import api from "../api";
+import PdfReportButton from "./PdfReportButton.jsx";
 
 export default function ContactDetailModal({ contactId, onClose }) {
   const [data, setData] = useState(null);
@@ -36,6 +37,14 @@ export default function ContactDetailModal({ contactId, onClose }) {
               <p className="text-xs text-gray-400">Status</p>
               <p className="text-gray-700">{data.active ? "Active" : "Inactive"}</p>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Contact report</p>
+              <p className="text-xs text-gray-400">Open a detailed donation report for this contact.</p>
+            </div>
+            <PdfReportButton url={`/reports/contacts/${data.id}/pdf`} label="Open PDF" allowPeriod />
           </div>
 
           <div className="bg-gray-50 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">

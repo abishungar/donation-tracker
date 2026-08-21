@@ -132,7 +132,7 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-2 shrink-0">
               <button title="Edit contact" onClick={e=>{e.stopPropagation();setModal({type:"contact",data:c})}} className="p-2 text-gray-400 hover:text-brand-600"><Pencil size={16}/></button>
               <button title="Deactivate contact" onClick={e=>{e.stopPropagation();setDeleteTarget({type:"contact",id:c.id,name:`${c.firstName} ${c.lastName}`})}} className="p-2 text-gray-400 hover:text-red-600"><Trash2 size={16}/></button>
-              <PdfReportButton url={`/reports/contacts/${c.id}/pdf`} label="PDF" allowPeriod className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium text-gray-700 hover:border-brand-300 hover:text-brand-700 whitespace-nowrap" /><button onClick={e=>{e.stopPropagation();setModal({type:"donation",data:c})}} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl font-semibold whitespace-nowrap">+ Add Donation</button>
+              <button onClick={e=>{e.stopPropagation();setModal({type:"donation",data:c})}} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl font-semibold whitespace-nowrap">+ Add Donation</button>
             </div>
           </div>)}</div>
         </div>
